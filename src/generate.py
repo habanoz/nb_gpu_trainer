@@ -1,6 +1,6 @@
 import torch
 from torch.nn import functional as F
-from model import GPT
+from model.gpt2 import GPT
 import sentencepiece as spm
 
 sp = spm.SentencePieceProcessor(model_file="eco_news_tr.model")

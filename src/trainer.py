@@ -6,7 +6,6 @@ import os
 import math
 import time
 import datetime
-from collections import defaultdict
 
 DEVICE="cuda"
 
