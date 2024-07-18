@@ -10,3 +10,7 @@ __pycache__/
 input.txt
 env/
 venv/
+wandb/
+tokenizer.model
+tokenizer.vocab
+*.egg-info/

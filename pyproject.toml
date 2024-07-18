@@ -5,9 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nb_gpu_trainer" 
 version = "1.0"
-
-[tool.setuptools]
-packages = ["mypackage"] 
+dependencies = [
+  'transformers',
+  'datasets',
+  'huggingface_hub',
+  'torch',
+  'numpy',
+  'sentencepiece',
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

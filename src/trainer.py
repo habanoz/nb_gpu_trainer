@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 import torch
 import torch.nn as nn
 import numpy as np
@@ -6,6 +6,9 @@ import os
 import math
 import time
 import datetime
+from transformers.trainer import Trainer
+from collections import defaultdict
+from typing import Any
 
 DEVICE="cuda"
 
@@ -33,15 +36,37 @@ class TrainerConfig:
     wandb_project: str = "GPT Training"
     wandb_run_name: str = "run1"
     grad_norm_clip: float = 1.0
+    repo_id: str = None
+
+@dataclass
+class TrainingState:
+    iter_num: int = 0
+    best_val_loss: float = 1e+9
+    optim_state: Any = field(default=None)
 
 class Trainer:
-    def __init__(self, config:TrainerConfig) -> None:
+    def __init__(self, config:TrainerConfig, state:TrainingState=None) -> None:
         self.config = config
+        self.state = state if state is not None else TrainingState()
+        assert self.state.iter_num < config.max_iters
+
+        self.callbacks = defaultdict(list)
 
         assert torch.cuda.is_available(), "Cuda is not available. This training script requires an NVIDIA GPU!"
         assert torch.cuda.is_bf16_supported(), "BF16 is not supported. This training script requires BF16 support!"
 
         self.ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+        
+
+    def add_callback(self, onevent: str, callback):
+        self.callbacks[onevent].append(callback)
+
+    def set_callback(self, onevent: str, callback):
+        self.callbacks[onevent] = [callback]
+
+    def trigger_callbacks(self, onevent: str, model):
+        for callback in self.callbacks.get(onevent, []):
+            callback(self, model)
 
     @staticmethod
     def from_config(config_file):
@@ -128,13 +153,16 @@ class Trainer:
         betas = (self.config.beta1, self.config.beta2)
         optimizer = torch.optim.AdamW(optim_groups, lr=self.config.learning_rate, betas=betas, fused=True)
         
+        if self.state.optim_state is not None:
+            optimizer.load_state_dict(self.state.optim_state)
+        
         return optimizer
     
     def _init_logging(self):
         if self.config.wandb_log:
             import wandb
             # wandb.require("core")
-            wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, config=asdict(self.config))
+            wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, resume="allow", config=asdict(self.config))
     
     @torch.no_grad()
     def estimate_loss(self, model:nn.Module):
@@ -174,17 +202,16 @@ class Trainer:
         # fetch the very first batch
         X, Y = self.get_batch('train')
         
-        start_iter = 0
-        best_val_loss = 1e+9
+        start_iter = self.state.iter_num
         running_fwd_bwd_tokens_per_sec = 0
         running_iter_time = 0
-        for iter in range(start_iter, self.config.max_iters+1):
+        for it in range(start_iter, self.config.max_iters+1):
             
             # determine current lr rate and update params if needed
-            lr = self.update_lr(iter, optimizer)
+            lr = self.update_lr(it, optimizer)
             
-            if iter % self.config.eval_interval == 0:
-                self.do_eval(model, optimizer, best_val_loss, running_fwd_bwd_tokens_per_sec, running_iter_time, iter, lr)
+            if it % self.config.eval_interval == 0:
+                self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
             
             # forward the model
             t0 = time.time()
@@ -200,7 +227,7 @@ class Trainer:
             optimizer.step()
             
             t1 = time.time()
-            if iter % self.config.log_interval == 0:
+            if it % self.config.log_interval == 0:
                 loss_item = loss.item() # GPU/CPU sync point
 
                 dt = t1 - t0
@@ -215,43 +242,35 @@ class Trainer:
                     running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
                     running_iter_time = 0.9* running_iter_time + 0.1 * dt
 
-                print(f"iter {iter}: loss {loss_item:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
+                print(f"iter {it}: loss {loss_item:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
 
 
-    def do_eval(self, model, optimizer, best_val_loss, running_fwd_bwd_tokens_per_sec, time_per_iter, iter, lr):
+    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr):
         t0 = time.time()
         losses = self.estimate_loss(model)
                 
         if self.config.wandb_log:
             import wandb
             wandb.log({
-                        "iter": iter,
+                        "iter": it,
                         "train/loss": losses['train'],
                         "val/loss": losses['val'],
                         "lr": lr,
                         "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     })
-                
-        if losses['val'] < best_val_loss:
-            best_val_loss = losses['val']
-            if iter > 0:
-                checkpoint = {
-                            'model': model.state_dict(),
-                            'optimizer': optimizer.state_dict(),
-                            'iter_num': iter,
-                            'best_val_loss': best_val_loss,
-                        }
-                print(f"saving checkpoint to {self.config.out_dir}")
-                if not os.path.exists(self.config.out_dir):
-                    os.makedirs(self.config.out_dir)
-                torch.save(checkpoint, os.path.join(self.config.out_dir, 'ckpt.pt'))
+        
+        new_val_loss = losses['val']
+        if  new_val_loss < self.state.best_val_loss:
+            self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
+            
+            self.trigger_callbacks("on_new_best_val_loss", model)
                 
         t1 = time.time()
         dt = t1 - t0
 
         if running_fwd_bwd_tokens_per_sec> 0:
             # remaining training iterations
-            rem_iters = self.config.max_iters - iter
+            rem_iters = self.config.max_iters - it
             rem_fwd_bwd_time = rem_iters * time_per_iter
             # remaining evaluation iterations
             rem_evals = rem_iters // self.config.eval_interval
@@ -261,4 +280,4 @@ class Trainer:
         else:
             eta = 0.0
 
-        print(f"Eval iter {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, ETA {datetime.timedelta(seconds=eta)}")
+        print(f"Eval iter {it}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, ETA {datetime.timedelta(seconds=eta)}")

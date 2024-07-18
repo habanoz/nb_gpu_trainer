@@ -1,6 +1,6 @@
 from transformers import PreTrainedModel
 from .gpt2 import GPT, GPTConfig
-from .cfg_mygpt2 import MyGPT2Config
+from .config_custom import MyGPT2Config
 
 class MyGTP2(PreTrainedModel):
     config_class = MyGPT2Config
