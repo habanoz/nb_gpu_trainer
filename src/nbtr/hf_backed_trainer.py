@@ -1,4 +1,4 @@
-from trainer import Trainer, TrainerConfig, TrainingState
+from .trainer import Trainer, TrainerConfig, TrainingState
 import os
 from torch.nn import Module
 import torch.nn as nn
