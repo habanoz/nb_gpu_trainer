@@ -1,6 +1,6 @@
 seq_length: 1024
 batch_size: 32
-ds_repo_id : habanoz/news-tr-90k
+ds_repo_id : habanoz/haber-90k-gpt-text
 data_dir: haber-90k-data
 warmup_iters: 100
 learning_rate:  0.001

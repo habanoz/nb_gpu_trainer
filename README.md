@@ -56,6 +56,12 @@ repo_id: habanoz/haber-gpt-v1.0
 
 ## How to train
 
+You first need to install.
+```bash
+pip install -e .
+```
+
+
 First, train your tokenizer.
 
 ```python
