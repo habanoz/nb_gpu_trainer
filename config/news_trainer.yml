@@ -1,7 +1,7 @@
-seq_length: 512
+seq_length: 1024
 batch_size: 32
-ds_repo_id : habanoz/eco-news-tr
-data_dir: haber-data
+ds_repo_id : habanoz/news-tr-90k
+data_dir: haber-90k-data
 warmup_iters: 100
 learning_rate:  0.001
 lr_decay_iters: 5000
@@ -15,13 +15,13 @@ decay_lr: True
 grad_norm_clip:  1.0
 seed: 145
 # output
-out_dir: haber-gpt
+out_dir: haber-90k-gpt
 # logging 
 log_interval: 10
 eval_interval: 250
 eval_iters: 200
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training
-wandb_run_name: haber-gpt-v1.0
-wandb_run_id: "1721342904"
-repo_id: habanoz/haber-gpt-v1.0
+wandb_run_name: haber-90k-gpt-v1.0
+wandb_run_id: "1721342905"
+repo_id: habanoz/haber-90k-gpt-v1.0
