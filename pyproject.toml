@@ -13,7 +13,7 @@ dependencies = [
 #  'torch',
 #  'numpy',
   'sentencepiece',
-  'wandb',
+#  'wandb',
 ]
 
 [tool.setuptools]
