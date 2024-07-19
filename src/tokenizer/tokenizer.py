@@ -19,11 +19,11 @@ class Tokenizer:
         return self.sp.Decode(ids)
 
     def encode(self, text:str):
-        input_ids = [self.sp.bos_id()]+self.sp.encode(text)+[self.sp.eos_id()]
+        input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
         return {"input_ids": input_ids}
     
     def encode_all(self, dataset, value_key):
-        columns = dataset.column_names
+        columns = dataset['train'].column_names
         assert value_key in columns, f"Column {value_key} not found in column list: [{columns}]"
 
         return dataset.map(lambda example: self.encode(example[value_key]), batched=True, remove_columns=columns)
@@ -37,6 +37,9 @@ class Tokenizer:
         assert "validation" in dataset, "Dataset does not contain split 'validation'!"
 
         dataset = self.encode_all(dataset, value_key=value_key)
+
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
 
         self._save_ids(dataset,data_dir,"train")
         self._save_ids(dataset,data_dir,"validation")

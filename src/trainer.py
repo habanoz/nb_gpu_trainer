@@ -16,6 +16,7 @@ DEVICE="cuda"
 class TrainerConfig:
     seq_length: int = 1024
     batch_size: int = 64
+    ds_repo_id: str = None
     data_dir: str = None
     warmup_iters: int = 100
     learning_rate: float = 1e-4
@@ -35,6 +36,7 @@ class TrainerConfig:
     wandb_log: bool = False
     wandb_project: str = "GPT Training"
     wandb_run_name: str = "run1"
+    wandb_run_id: str = None
     grad_norm_clip: float = 1.0
     repo_id: str = None
 
@@ -89,7 +91,7 @@ class Trainer:
         if split == 'train':
             data = np.memmap(os.path.join(self.config.data_dir, 'train.bin'), dtype=np.uint16, mode='r')
         else:
-            data = np.memmap(os.path.join(self.config.data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+            data = np.memmap(os.path.join(self.config.data_dir, 'validation.bin'), dtype=np.uint16, mode='r')
         
         ix = torch.randint(len(data) - self.config.seq_length, (self.config.batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+self.config.seq_length]).astype(np.int64)) for i in ix])
@@ -162,7 +164,7 @@ class Trainer:
         if self.config.wandb_log:
             import wandb
             # wandb.require("core")
-            wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, resume="allow", config=asdict(self.config))
+            wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, resume="allow", config=asdict(self.config))
     
     @torch.no_grad()
     def estimate_loss(self, model:nn.Module):

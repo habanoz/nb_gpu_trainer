@@ -31,7 +31,7 @@ class HFBackedTrainer(Trainer):
             if optimization_safetensors_file is not None:
                 trainer_state = torch.load(optimization_safetensors_file)
 
-            print("Resume training. Using repo {config.repo_id}")
+            print(f"Resume training. Using repo {config.repo_id}")
         else:
             repo = self.api.create_repo(repo_id=config.repo_id, private=True, exist_ok=True)
             print(f"New training. Created repo {repo}")

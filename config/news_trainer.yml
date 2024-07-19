@@ -1,5 +1,6 @@
 seq_length: 512
 batch_size: 32
+ds_repo_id : habanoz/eco-news-tr
 data_dir: haber-data
 warmup_iters: 100
 learning_rate:  0.001
@@ -22,4 +23,5 @@ eval_iters: 200
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training
 wandb_run_name: haber-gpt-v1.0
+wandb_run_id: "1721342904"
 repo_id: habanoz/haber-gpt-v1.0
