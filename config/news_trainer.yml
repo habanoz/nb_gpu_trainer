@@ -4,8 +4,8 @@ ds_repo_id : habanoz/haber-90k-gpt-text
 data_dir: haber-90k-data
 warmup_iters: 100
 learning_rate:  0.001
-lr_decay_iters: 5000
-max_iters: 5000
+lr_decay_iters: 6000
+max_iters: 6000
 min_lr: 0.0001
 weight_decay: 0.1
 beta1:  0.9
@@ -23,5 +23,5 @@ eval_iters: 200
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training
 wandb_run_name: haber-90k-gpt-v1.0
-wandb_run_id: "1721342905"
+wandb_run_id: "1721342906"
 repo_id: habanoz/haber-90k-gpt-v1.0
