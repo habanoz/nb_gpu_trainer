@@ -1,5 +1,6 @@
 seq_length: 1024
 batch_size: 32
+gradient_accumulation_steps: 1
 ds_repo_id : habanoz/haber-90k-gpt-text
 data_dir: haber-90k-data
 warmup_iters: 100
@@ -22,6 +23,7 @@ eval_interval: 250
 eval_iters: 200
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training
-wandb_run_name: haber-90k-gpt-v1.0
-wandb_run_id: "1721342906"
-repo_id: habanoz/haber-90k-gpt-v1.0
+wandb_run_name: haber-90k-gpt-v1.1
+wandb_run_id: "1721342907"
+repo_id: habanoz/haber-90k-gpt-v1.1
+dtype: float16

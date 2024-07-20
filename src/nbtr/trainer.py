@@ -15,6 +15,7 @@ DEVICE="cuda"
 @dataclass
 class TrainerConfig:
     seq_length: int = 1024
+    gradient_accumulation_steps:int = 1
     batch_size: int = 64
     ds_repo_id: str = None
     data_dir: str = None
@@ -39,6 +40,7 @@ class TrainerConfig:
     wandb_run_id: str = None
     grad_norm_clip: float = 1.0
     repo_id: str = None
+    dtype: str = 'bfloat16'
 
 @dataclass
 class TrainingState:
@@ -54,10 +56,13 @@ class Trainer:
 
         self.callbacks = defaultdict(list)
 
-        assert torch.cuda.is_available(), "Cuda is not available. This training script requires an NVIDIA GPU!"
-        assert torch.cuda.is_bf16_supported(), "BF16 is not supported. This training script requires BF16 support!"
+        dtype = torch.float16 if self.config.dtype=='float16' else torch.bfloat16
 
-        self.ctx = torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16)
+        assert torch.cuda.is_available(), "Cuda is not available. This training script requires an NVIDIA GPU!"
+        assert dtype!=torch.bfloat16 or torch.cuda.is_bf16_supported(), "Bfloat data type is selected but it is not supported! Replace it with float16 data type."
+
+        
+        self.ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
         
 
     def add_callback(self, onevent: str, callback):
@@ -196,6 +201,7 @@ class Trainer:
             
         self._init_logging()
 
+        scaler = torch.cuda.amp.GradScaler(enabled=(self.config.dtype == 'float16'))
         optimizer = self._configure_optimizers(model)
 
         # start training
@@ -217,20 +223,27 @@ class Trainer:
             
             # forward the model
             t0 = time.time()
-            with self.ctx:
-                _, loss = model(X, Y)
-            
-            # immediately async prefetch next batch while model is doing the forward pass on the GPU
-            X, Y = self.get_batch('train')
+            for _ in range(self.config.gradient_accumulation_steps):
+                with self.ctx:
+                    _, loss = model(X, Y)
+                    loss = loss / self.config.gradient_accumulation_steps
 
-            model.zero_grad(set_to_none=True)
-            loss.backward()
+                # immediately async prefetch next batch while model is doing the forward pass on the GPU
+                X, Y = self.get_batch('train')
+
+                scaler.scale(loss).backward()
+
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
-            optimizer.step()
+            
+            scaler.step(optimizer)
+            scaler.update()
+
+            optimizer.zero_grad(set_to_none=True)
             
             t1 = time.time()
             if it % self.config.log_interval == 0:
-                loss_item = loss.item() # GPU/CPU sync point
+                loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
 
                 dt = t1 - t0
                 
@@ -244,7 +257,7 @@ class Trainer:
                     running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
                     running_iter_time = 0.9* running_iter_time + 0.1 * dt
 
-                print(f"iter {it}: loss {loss_item:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
+                print(f"iter {it}: loss {loss_sum:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
 
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr):
