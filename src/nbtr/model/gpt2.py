@@ -13,6 +13,15 @@ class GPTConfig:
     n_layer: int = 6
     dropout: float = 0.1
 
+    @staticmethod
+    def from_yaml(config_file:str):
+        import yaml
+
+        with open(config_file) as f:
+            doc = yaml.safe_load(f)
+        
+        return GPTConfig(**doc)
+
 class MLP(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()

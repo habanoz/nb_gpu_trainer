@@ -42,6 +42,15 @@ class TrainerConfig:
     repo_id: str = None
     dtype: str = 'bfloat16'
 
+    @staticmethod
+    def from_yaml(config_file:str):
+        import yaml
+
+        with open(config_file) as f:
+            doc = yaml.safe_load(f)
+        
+        return TrainerConfig(**doc)
+
 @dataclass
 class TrainingState:
     iter_num: int = 0
@@ -61,7 +70,6 @@ class Trainer:
         assert torch.cuda.is_available(), "Cuda is not available. This training script requires an NVIDIA GPU!"
         assert dtype!=torch.bfloat16 or torch.cuda.is_bf16_supported(), "Bfloat data type is selected but it is not supported! Replace it with float16 data type."
 
-        
         self.ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
         
 

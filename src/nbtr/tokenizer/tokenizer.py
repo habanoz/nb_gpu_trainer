@@ -17,7 +17,15 @@ class Tokenizer:
         if 'input_ids' in ids:
             ids = ids['input_ids']
         return self.sp.Decode(ids)
-
+    
+    @property
+    def eos_id(self):
+        self.sp.eos_id
+    
+    @property
+    def bos_id(self):
+        self.sp.bos_id
+        
     def encode(self, text:str):
         input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
         return {"input_ids": input_ids}

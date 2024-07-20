@@ -1,4 +1,6 @@
 from .trainer import Trainer, TrainerConfig, TrainingState
+from nbtr.model.hf_trainer_state import HFTrainerState
+from nbtr.model.hf_model import HfModel
 import os
 from torch.nn import Module
 import torch.nn as nn
@@ -21,15 +23,7 @@ class HFBackedTrainer(Trainer):
         self.model_state = None
 
         if self.api.repo_exists(repo_id=config.repo_id):
-            
-            model_safetensors_file = cached_file(config.repo_id, model_file_name, _raise_exceptions_for_missing_entries=False)
-            optimization_safetensors_file = cached_file(config.repo_id, optim_file_name, _raise_exceptions_for_missing_entries=False)
-
-            if model_safetensors_file is not None:
-                self.model_state = torch.load(model_safetensors_file)
-            
-            if optimization_safetensors_file is not None:
-                trainer_state = torch.load(optimization_safetensors_file)
+            trainer_state = HFTrainerState.from_pretrained_or_none(self.config)
 
             print(f"Resume training. Using repo {config.repo_id}")
         else:
@@ -74,8 +68,6 @@ class HFBackedTrainer(Trainer):
 
     def do_on_eval(self, model:Module):
         print(f"Callback iter: {self.state.iter_num}, best val loss: {self.state.best_val_loss}")
-        model_out_path = os.path.join(self.config.out_dir, model_file_name)
-        optim_out_path = os.path.join(self.config.out_dir, optim_file_name)
 
         if self.state.iter_num > 0:
             print(f"saving checkpoint to {self.config.out_dir}")
@@ -85,10 +77,14 @@ class HFBackedTrainer(Trainer):
 
             # cancel previous tasks
             self.executor.shutdown(cancel_futures=True)
+            
+            # save trainer state
+            hf_state = HFTrainerState(self.state, self.config)
+            hf_state.save()
+            # save model state
+            HfModel.save(model, self.config)
 
-            torch.save(model.state_dict(), model_out_path)
-            torch.save(self.state, optim_out_path)
-
+            # upload saved files at the background
             self.executor = ThreadPoolExecutor(max_workers=self.num_workers)
-            self.executor.submit(self._upload_file, model_out_path, model_file_name)
-            self.executor.submit(self._upload_file, optim_out_path, optim_file_name)
+            self.executor.submit(hf_state.upload_saved)
+            self.executor.submit(HfModel.upload_saved, self.config)
