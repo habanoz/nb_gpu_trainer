@@ -1,4 +1,4 @@
-seq_length: 512
+seq_length: 1024
 vocab_size: 8192
 n_embed: 384
 n_head: 6
