@@ -18,12 +18,12 @@ class Trainer:
             os.makedirs(self.out_dir)
         
         # create a temporary long text file and remove it after training
-        with tempfile.NamedTemporaryFile(mode='w', delete_on_close=False) as fp:
+        with tempfile.NamedTemporaryFile(mode='w') as fp:
             for doc in ds['train']:
                 fp.write(doc['text'])
             for doc in ds['validation']:
                 fp.write(doc['text'])
-            fp.close()
+            fp.flush()
             
             spm.SentencePieceTrainer.Train(input=fp.name, model_prefix=f"{self.out_dir}/tokenizer", vocab_size=2**13, model_type="bpe", split_digits=True)
 
