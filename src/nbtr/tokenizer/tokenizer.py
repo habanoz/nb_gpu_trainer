@@ -3,15 +3,32 @@ from datasets import load_dataset
 import numpy as np
 import os
 from transformers.utils import cached_file
+from huggingface_hub import HfApi
 
+TOK_FILE_NAME="tokenizer.model"
+VOC_FILE_NAME="tokenizer.vocab"
 class Tokenizer:
     def __init__(self, tokenizer_model_file) -> None:
         self.sp = spm.SentencePieceProcessor(model_file=tokenizer_model_file)
     
     @staticmethod
     def from_pretrained(repo_id):
-        tokenizer_model_file = cached_file(repo_id, "tokenizer.model", _raise_exceptions_for_missing_entries=True)
+        tokenizer_model_file = cached_file(repo_id, TOK_FILE_NAME, _raise_exceptions_for_missing_entries=True)
         return Tokenizer(tokenizer_model_file)
+    
+    @staticmethod
+    def copy_pretrained(from_repo_id, to_repo_id):
+        hfApi = HfApi()
+
+        if not hfApi.repo_exists(repo_id=to_repo_id):
+            repo = hfApi.create_repo(repo_id=to_repo_id)
+            print("Repo created:", repo)
+
+        tokenizer_model_file = cached_file(from_repo_id, TOK_FILE_NAME, _raise_exceptions_for_missing_entries=True)
+        hfApi.upload_file(path_or_fileobj=tokenizer_model_file, path_in_repo=TOK_FILE_NAME, repo_id=to_repo_id)
+
+        tokenizer_vocab_file = cached_file(from_repo_id, VOC_FILE_NAME, _raise_exceptions_for_missing_entries=True)
+        hfApi.upload_file(path_or_fileobj=tokenizer_vocab_file, path_in_repo=VOC_FILE_NAME, repo_id=to_repo_id )
     
     def decode(self, ids):
         if 'input_ids' in ids:

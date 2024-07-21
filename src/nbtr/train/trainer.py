@@ -17,7 +17,6 @@ class TrainerConfig:
     seq_length: int = 1024
     gradient_accumulation_steps:int = 1
     batch_size: int = 64
-    ds_repo_id: str = None
     data_dir: str = None
     warmup_iters: int = 100
     learning_rate: float = 1e-4
@@ -33,13 +32,12 @@ class TrainerConfig:
     log_interval: int = 10
     eval_interval: int = 250
     eval_iters: int = 200
-    out_dir:str = "out"
+    out_dir:str = None
     wandb_log: bool = False
     wandb_project: str = "GPT Training"
     wandb_run_name: str = "run1"
     wandb_run_id: str = None
     grad_norm_clip: float = 1.0
-    repo_id: str = None
     dtype: str = 'bfloat16'
 
     @staticmethod
@@ -92,7 +90,7 @@ class Trainer:
         else:
             self.skip_first_new_best_val_loss = False 
         
-    @staticmethod
+    """     @staticmethod
     def from_config(config_file):
         import yaml
 
@@ -104,8 +102,7 @@ class Trainer:
                 exit(1)
         
         config = TrainerConfig(**doc)
-        return Trainer(config)
-            
+        return Trainer(config) """
 
     def get_batch(self, split):
         # We recreate np.memmap every batch to avoid a memory leak, as per

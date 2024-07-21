@@ -136,7 +136,7 @@ class GPT(nn.Module):
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
     
-    @staticmethod
+    """@staticmethod
     def from_config(config_file):
         import yaml
 
@@ -148,7 +148,7 @@ class GPT(nn.Module):
                 exit(1)
         
         config = GPTConfig(**doc)
-        return GPT(config)
+        return GPT(config)"""
     
     def forward(self, idx, targets=None):
         device = idx.device

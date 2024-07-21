@@ -13,7 +13,6 @@ if __name__ == '__main__':
     parser.add_argument("--repo_id", type=str, required=True, help="Model repository id")
     parser.add_argument("--out_dir", type=str, required=False, default=None, help="Leave empty to infer from repo_id")
     args = parser.parse_args()
-    
 
     ds_repo_id = args.ds_repo_id
     assert ds_repo_id is not None

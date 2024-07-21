@@ -18,7 +18,7 @@ class Trainer:
             os.makedirs(self.out_dir)
         
         # create a temporary long text file and remove it after training
-        with tempfile.NamedTemporaryFile(mode='w',delete=False) as fp:
+        with tempfile.NamedTemporaryFile(mode='w',delete=False, encoding="utf-8") as fp:
             for doc in ds['train']:
                 fp.write(doc['text'])
             for doc in ds['validation']:
