@@ -1,7 +1,6 @@
 seq_length: 1024
 batch_size: 32
 gradient_accumulation_steps: 1
-ds_repo_id : habanoz/haber-90k-gpt-text
 warmup_iters: 100
 learning_rate:  0.001
 lr_decay_iters: 6000
@@ -14,8 +13,6 @@ compile: False
 decay_lr: True
 grad_norm_clip:  1.0
 seed: 145
-# output
-out_dir: haber-90k-gpt
 # logging 
 log_interval: 10
 eval_interval: 250

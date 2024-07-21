@@ -1,7 +1,5 @@
-from transformers import PreTrainedModel
 from huggingface_hub import HfApi
 from .gpt2 import GPT
-from nbtr.trainer import TrainerConfig
 from .hf_model_config import HfModelConfig
 from transformers.utils import cached_file
 import torch
@@ -11,11 +9,12 @@ from typing import Optional
 
 FILE_NAME = 'pytorch_model.bin'
 
-class HfModel(PreTrainedModel):
+class HfModel():
     config_class = HfModelConfig
     def __init__(self, config:HfModelConfig):
         super().__init__(config)
         self._model = GPT(config=config.gpt_config)
+        self._config = config
 
     def forward(self, x, y):
         logits, loss =  self._model(x,y)
@@ -25,16 +24,21 @@ class HfModel(PreTrainedModel):
     def model(self):
         return self._model
     
+    @property
+    def config(self):
+        return self._config
+    
     def save_pretrained(
         self,
         save_directory: str,
         repo_id: Optional[str],
-        push_to_hub: bool = False
-    ):
+        push_to_hub: bool = True
+    ):  
+        self._config.save_pretrained(save_directory, push_to_hub=False)
         HfModel.save(self._model, save_directory)
 
         if push_to_hub:
-            ## TODO: fix repo id
+            self._config.save_pretrained(save_directory, push_to_hub=True)
             HfModel.upload_saved(save_directory, repo_id)
         
     @staticmethod

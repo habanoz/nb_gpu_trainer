@@ -72,6 +72,9 @@ class Trainer:
 
         self.ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
         
+        ## internal state
+        self.skip_first_new_best_val_loss = True
+    
 
     def add_callback(self, onevent: str, callback):
         self.callbacks[onevent].append(callback)
@@ -83,6 +86,12 @@ class Trainer:
         for callback in self.callbacks.get(onevent, []):
             callback(self, model)
 
+    def on_new_best_val_loss(self, model:nn.Module):
+        if not self.skip_first_new_best_val_loss:
+            self.trigger_callbacks("on_new_best_val_loss", model)
+        else:
+            self.skip_first_new_best_val_loss = False 
+        
     @staticmethod
     def from_config(config_file):
         import yaml
@@ -286,7 +295,7 @@ class Trainer:
         if  new_val_loss < self.state.best_val_loss:
             self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
             
-            self.trigger_callbacks("on_new_best_val_loss", model)
+            self.on_new_best_val_loss(model)
                 
         t1 = time.time()
         dt = t1 - t0
