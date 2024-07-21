@@ -7,6 +7,7 @@ from transformers.utils import cached_file
 import torch
 import torch.nn as nn
 import os
+from typing import Optional
 
 FILE_NAME = 'pytorch_model.bin'
 
@@ -24,11 +25,23 @@ class HfModel(PreTrainedModel):
     def model(self):
         return self._model
     
+    def save_pretrained(
+        self,
+        save_directory: str,
+        repo_id: Optional[str],
+        push_to_hub: bool = False
+    ):
+        HfModel.save(self._model, save_directory)
+
+        if push_to_hub:
+            ## TODO: fix repo id
+            HfModel.upload_saved(save_directory, repo_id)
+        
     @staticmethod
     def from_pretrained(repo_id):
         hf_cfg = HfModelConfig.from_pretrained(repo_id)
         hf_model = HfModel(hf_cfg)
-        
+
         # update model state with the latest state from the repo
         model_file = cached_file(repo_id, FILE_NAME, _raise_exceptions_for_missing_entries=True)
         model_state = torch.load(model_file, torch.device(hf_model.device))
@@ -36,11 +49,14 @@ class HfModel(PreTrainedModel):
             
         return hf_model
     
-    def save(self, model:nn.Module, trainer_config:TrainerConfig):
-        torch.save(model.state_dict(), self._get_path(trainer_config))
+    @staticmethod
+    def save(model:nn.Module, save_directory:str):
+        torch.save(model.state_dict(), HfModel._get_path(save_directory))
     
-    def upload_saved(self, trainer_config:TrainerConfig):
-        HfApi().upload_file(path_or_fileobj=self._get_path(trainer_config), path_in_repo=FILE_NAME, repo_id=trainer_config.repo_id)
-        
-    def _get_path(self, trainer_config:TrainerConfig):
-        return os.path.join(trainer_config.out_dir, FILE_NAME)
+    @staticmethod
+    def upload_saved(save_directory:str, repo_id:str):
+        HfApi().upload_file(path_or_fileobj=HfModel._get_path(save_directory), path_in_repo=FILE_NAME, repo_id=repo_id)
+    
+    @staticmethod
+    def _get_path(save_directory:str):
+        return os.path.join(save_directory, FILE_NAME)

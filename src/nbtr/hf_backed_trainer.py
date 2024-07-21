@@ -5,12 +5,7 @@ import os
 from torch.nn import Module
 import torch.nn as nn
 from huggingface_hub import HfApi
-from transformers.utils import cached_file
-import torch
 from concurrent.futures import ThreadPoolExecutor
-
-model_file_name = 'pytorch_model.bin'
-optim_file_name = 'trainer_state.bin'
 
 class HFBackedTrainer(Trainer):
     num_workers = 2
@@ -23,16 +18,16 @@ class HFBackedTrainer(Trainer):
         self.model_state = None
 
         if self.api.repo_exists(repo_id=config.repo_id):
-            trainer_state = HFTrainerState.from_pretrained_or_none(self.config)
-
-            print(f"Resume training. Using repo {config.repo_id}")
+            print(f"Found existing repo!")
+            hf_trainer_state = HFTrainerState.from_pretrained_or_none(config)
+            if hf_trainer_state is not None:
+                trainer_state = hf_trainer_state.state
+                print("Resume training...")
         else:
             repo = self.api.create_repo(repo_id=config.repo_id, private=True, exist_ok=True)
             print(f"New training. Created repo {repo}")
 
-
         super().__init__(config=config, state=trainer_state)
-        
         
         self.add_callback("on_new_best_val_loss", lambda trainer, model : self.do_on_eval(model))
         self.executor = ThreadPoolExecutor(max_workers=self.num_workers)
@@ -82,9 +77,9 @@ class HFBackedTrainer(Trainer):
             hf_state = HFTrainerState(self.state, self.config)
             hf_state.save()
             # save model state
-            HfModel.save(model, self.config)
+            HfModel.save(model, self.config.out_dir)
 
             # upload saved files at the background
             self.executor = ThreadPoolExecutor(max_workers=self.num_workers)
             self.executor.submit(hf_state.upload_saved)
-            self.executor.submit(HfModel.upload_saved, self.config)
+            self.executor.submit(HfModel.upload_saved, self.config.out_dir, self.config.repo_id)
