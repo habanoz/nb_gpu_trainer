@@ -34,7 +34,7 @@ class HfModelConfig():
         with open(config_file) as f:
             doc = json.load(f)
 
-        return HfModelConfig(gpt_config=GPTConfig(**doc))
+        return HfModelConfig(gpt_config=GPTConfig(**doc['gpt_config']))
 
     def save(self, out_dir):
         if not os.path.exists(out_dir):
