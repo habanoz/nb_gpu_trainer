@@ -2,9 +2,9 @@ seq_length: 1024
 batch_size: 32
 gradient_accumulation_steps: 1
 warmup_iters: 100
-learning_rate:  0.001
-lr_decay_iters: 6000
-max_iters: 6000
+learning_rate:  0.003
+lr_decay_iters: 10_000
+max_iters: 10_000
 min_lr: 0.0001
 weight_decay: 0.1
 beta1:  0.9
@@ -19,6 +19,6 @@ eval_interval: 250
 eval_iters: 200
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training
-wandb_run_name: haber-90k-gpt-v1.1
-wandb_run_id: "1721342908"
+wandb_run_name: haber-90k-gpt-v1.2(lr3x)
+wandb_run_id: "1721342909"
 dtype: float16
