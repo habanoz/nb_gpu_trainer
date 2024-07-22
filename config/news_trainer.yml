@@ -19,6 +19,6 @@ eval_interval: 250
 eval_iters: 200
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training
-wandb_run_name: haber-90k-gpt-v1.2(lr3x)
-wandb_run_id: "1721342909"
+wandb_run_name: haber-90k-gpt-v1.3(emb512)
+wandb_run_id: "1721342910"
 dtype: float16
