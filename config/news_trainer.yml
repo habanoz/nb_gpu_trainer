@@ -1,5 +1,5 @@
 seq_length: 1024
-batch_size: 32
+batch_size: 64
 gradient_accumulation_steps: 1
 warmup_iters: 100
 learning_rate:  0.003
