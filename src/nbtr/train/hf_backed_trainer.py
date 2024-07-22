@@ -54,7 +54,7 @@ class HFBackedTrainer(Trainer):
         model = hf_model.model
         
         self.hf_trainer_config.save_pretrained(push_to_hub=True)
-        hf_model.config.save_pretrained(self.config.out_dir, push_to_hub=True)
+        hf_model.config.save_pretrained(self.config.out_dir, repo_id=self.hf_trainer_config.repo_id, push_to_hub=True)
 
         super().train(model=model)
 

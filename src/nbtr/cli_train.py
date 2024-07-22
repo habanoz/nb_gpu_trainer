@@ -4,6 +4,7 @@ from nbtr.model.hf_model import HfModel
 from nbtr.model.hf_trainer_config import HfTrainerConfig
 from nbtr.model.hf_model_config import HfModelConfig
 from nbtr.model.gpt2 import GPTConfig
+from dataclasses import replace
 import argparse
 
 
@@ -21,8 +22,13 @@ def main_with_repo_id(repo_id):
     print("Done. Repo id:", repo_id)
 
 
-def main_with_config(repo_id, trainer_config_file, model_config_file):
+def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file):
     trainer_config = TrainerConfig.from_yaml(trainer_config_file)
+    
+    if data_dir is not None:
+        trainer_config = replace(trainer_config, data_dir=data_dir)
+
+    assert trainer_config.data_dir is not None
 
     # prepare model
     gpt_config = GPTConfig.from_yaml(model_config_file)
@@ -42,16 +48,18 @@ def main_with_config(repo_id, trainer_config_file, model_config_file):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo_id", type=str, required=True, help="Model repository id")
+    parser.add_argument("--data_dir", type=str, required=False, help="Data directory override.")
     parser.add_argument("--trainer_config_file", "-C", type=str, required=False, default=None, help="Trainer config file")
     parser.add_argument("--model_config_file", "-M", type=str, required=False, default=None, help="Model config file")
     args = parser.parse_args()
 
     repo_id = args.repo_id
+    data_dir = args.data_dir
     trainer_config_file = args.trainer_config_file
     model_config_file = args.model_config_file
 
     if trainer_config_file is not None:
         assert model_config_file is not None
-        main_with_config(repo_id, trainer_config_file, model_config_file)
+        main_with_config(repo_id, data_dir, trainer_config_file, model_config_file)
     else:
         main_with_repo_id(repo_id)

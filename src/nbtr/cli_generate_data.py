@@ -18,6 +18,9 @@ if __name__ == '__main__':
     assert ds_repo_id is not None
     repo_id = args.repo_id
     assert repo_id is not None
-    data_dir = ds_repo_id.split("/")[-1]
+    
+    data_dir = args.data_dir
+    if data_dir is None:
+        data_dir = ds_repo_id.split("/")[-1]
 
     main(repo_id, ds_repo_id, data_dir)

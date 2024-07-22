@@ -37,11 +37,11 @@ class HfModel():
         repo_id: Optional[str],
         push_to_hub: bool = True
     ):  
-        self._config.save_pretrained(save_directory, push_to_hub=False)
+        self._config.save(save_directory)
         HfModel.save(self._model, save_directory)
 
         if push_to_hub:
-            self._config.save_pretrained(save_directory, push_to_hub=True)
+            self._config.upload_saved(save_directory, repo_id=repo_id)
             HfModel.upload_saved(save_directory, repo_id)
         
     @staticmethod
