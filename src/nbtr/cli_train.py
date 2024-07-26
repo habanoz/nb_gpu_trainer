@@ -36,7 +36,7 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
     # prepare model
     gpt_config = GPTConfig.from_yaml(model_config_file)
     hf_model_config = HfModelConfig(gpt_config=gpt_config)
-    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config,device="cpu")
+    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config)
 
     # prepare trainer
     hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config)
