@@ -186,17 +186,22 @@ class Trainer:
             wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, resume="allow", config=asdict(self.config))
     
     @torch.no_grad()
-    def estimate_loss(self, model:nn.Module):
+    def evaluate(self, model:nn.Module):
         out = {}
         model.eval()
         for split in ['train', 'val']:
             losses = torch.zeros(self.config.eval_iters)
+            perplexities = torch.zeros(self.config.eval_iters)
             for k in range(self.config.eval_iters):
                 X, Y = self.get_batch(split)
                 with self.ctx:
                     _, loss = model(X, Y)
                 losses[k] = loss.item()
-            out[split] = losses.mean()
+                perplexities[k] = torch.exp(loss).item()
+            out[split] = {
+                'loss': losses.mean().item(),
+                'perplexity': perplexities.mean().item()
+            }
         model.train()
         return out
 
@@ -276,19 +281,20 @@ class Trainer:
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr):
         t0 = time.time()
-        losses = self.estimate_loss(model)
+        eval_out = self.evaluate(model)
                 
         if self.config.wandb_log:
             import wandb
             wandb.log({
                         "iter": it,
-                        "train/loss": losses['train'],
-                        "val/loss": losses['val'],
+                        "train/loss": eval_out['train']['loss'],
+                        "val/loss": eval_out['val']['loss'],
+                        "val/perplexity": eval_out['val']["perplexity"],
                         "lr": lr,
                         "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     })
         
-        new_val_loss = losses['val']
+        new_val_loss = eval_out['val']
         if  new_val_loss < self.state.best_val_loss:
             self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
             
@@ -309,4 +315,4 @@ class Trainer:
         else:
             eta = 0.0
 
-        print(f"Eval iter {it}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, ETA {datetime.timedelta(seconds=eta)}")
+        print(f"Eval iter {it}: train loss {eval_out['train']:.4f}, val loss {eval_out['val']:.4f}, ETA {datetime.timedelta(seconds=eta)}")
