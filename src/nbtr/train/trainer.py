@@ -235,7 +235,7 @@ class Trainer:
         start_iter = self.state.iter_num
         running_fwd_bwd_tokens_per_sec = 0
         running_iter_time = 0
-        
+        t0 = 0
         for it in range(start_iter, self.config.max_iters+1):
             
             # determine current lr rate and update params if needed
@@ -245,7 +245,8 @@ class Trainer:
                 self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
             
             # forward the model
-            t0 = time.time()
+            if t0 == 0:
+                t0 = time.time()
             for _ in range(self.config.gradient_accumulation_steps):
                 with self.ctx:
                     _, loss = model(X, Y)
@@ -268,6 +269,7 @@ class Trainer:
                 loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
                 
                 dt = time.time() - t0
+                t0 = 0
                             
                 iters_since_last_log = self.config.log_interval if it > 0 else 1
                 fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log
