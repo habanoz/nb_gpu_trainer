@@ -242,10 +242,7 @@ class Trainer:
             
             # determine current lr rate and update params if needed
             lr = self.update_lr(it, optimizer)
-            
-            if it % self.config.eval_interval == 0:
-                self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
-                
+
             # forward the model
             if t0 == 0:
                 t0 = time.time()
