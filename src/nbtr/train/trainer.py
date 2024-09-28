@@ -294,7 +294,7 @@ class Trainer:
                         "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     })
         
-        new_val_loss = eval_out['val']
+        new_val_loss = eval_out['val']['loss']
         if  new_val_loss < self.state.best_val_loss:
             self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
             
