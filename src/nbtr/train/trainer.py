@@ -8,7 +8,7 @@ import time
 import datetime
 from transformers.trainer import Trainer
 from collections import defaultdict
-from typing import Any
+from typing import Any, Dict
 
 DEVICE="cuda"
 
@@ -54,6 +54,12 @@ class TrainingState:
     iter_num: int = 0
     best_val_loss: float = 1e+9
     optim_state: Any = field(default=None)
+
+@dataclass
+class EvalResult:
+    loss: float
+    perplexity: float
+
 
 class Trainer:
     def __init__(self, config:TrainerConfig, state:TrainingState=None) -> None:
@@ -186,7 +192,7 @@ class Trainer:
             wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, resume="allow", config=asdict(self.config))
     
     @torch.no_grad()
-    def evaluate(self, model:nn.Module):
+    def evaluate(self, model:nn.Module)->Dict[str,EvalResult]:
         out = {}
         model.eval()
         for split in ['train', 'val']:
@@ -198,10 +204,7 @@ class Trainer:
                     _, loss = model(X, Y)
                 losses[k] = loss.item()
                 perplexities[k] = torch.exp(loss).item()
-            out[split] = {
-                'loss': losses.mean().item(),
-                'perplexity': perplexities.mean().item()
-            }
+            out[split] = EvalResult(loss=losses.mean().item(), perplexity=perplexities.mean().item())
         model.train()
         return out
 
@@ -232,6 +235,9 @@ class Trainer:
         start_iter = self.state.iter_num
         running_fwd_bwd_tokens_per_sec = 0
         running_iter_time = 0
+        
+        torch.cuda.synchronize() # make sure GPU is ready before we start timing
+        
         for it in range(start_iter, self.config.max_iters+1):
             
             # determine current lr rate and update params if needed
@@ -259,14 +265,15 @@ class Trainer:
             scaler.update()
 
             optimizer.zero_grad(set_to_none=True)
-            
-            t1 = time.time()
+
             if it % self.config.log_interval == 0:
                 loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
-
-                dt = t1 - t0
                 
-                fwd_bwd_tokens = self.config.batch_size * self.config.seq_length
+                dt = time.time() - t0
+                            
+                iters_since_last_log = self.config.log_interval if it > 0 else 1
+                fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log
+                
                 fwd_bwd_tokens_per_sec = fwd_bwd_tokens * (1.0 / dt)
                 
                 if running_fwd_bwd_tokens_per_sec==0:
@@ -287,14 +294,14 @@ class Trainer:
             import wandb
             wandb.log({
                         "iter": it,
-                        "train/loss": eval_out['train']['loss'],
-                        "val/loss": eval_out['val']['loss'],
-                        "val/perplexity": eval_out['val']["perplexity"],
+                        "train/loss": eval_out['train'].loss,
+                        "val/loss": eval_out['val'].perplexity,
+                        "val/perplexity": eval_out['val'].perplexity,
                         "lr": lr,
                         "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     })
         
-        new_val_loss = eval_out['val']['loss']
+        new_val_loss = eval_out['val'].loss
         if  new_val_loss < self.state.best_val_loss:
             self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
             
@@ -315,4 +322,4 @@ class Trainer:
         else:
             eta = 0.0
 
-        print(f"Eval iter {it}: train loss {eval_out['train']:.4f}, val loss {eval_out['val']:.4f}, ETA {datetime.timedelta(seconds=eta)}")
+        print(f"Eval iter {it}: train loss {eval_out['train'].loss:.4f}, val loss {eval_out['val'].loss:.4f}, val perplexity {eval_out['val'].perplexity:.4f}, ETA {datetime.timedelta(seconds=eta)}")
