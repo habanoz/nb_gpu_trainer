@@ -276,12 +276,13 @@ class Trainer:
                 
                 fwd_bwd_tokens_per_sec = fwd_bwd_tokens / dt
                 
-                if running_fwd_bwd_tokens_per_sec==0:
-                    running_fwd_bwd_tokens_per_sec = fwd_bwd_tokens_per_sec
-                    running_iter_time = dt
-                else:
-                    running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
-                    running_iter_time = 0.9* running_iter_time + 0.1 * dt
+                if it > 0:
+                    if running_fwd_bwd_tokens_per_sec==0:
+                        running_fwd_bwd_tokens_per_sec = fwd_bwd_tokens_per_sec
+                        running_iter_time = dt
+                    else:
+                        running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
+                        running_iter_time = 0.9* running_iter_time + 0.1 * dt
 
                 print(f"iter {it}: loss {loss_sum:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
 
