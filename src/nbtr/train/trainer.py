@@ -235,7 +235,9 @@ class Trainer:
         start_iter = self.state.iter_num
         running_fwd_bwd_tokens_per_sec = 0
         running_iter_time = 0
-        t0 = 0
+        
+        self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate)
+        
         for it in range(start_iter, self.config.max_iters+1):
             
             # determine current lr rate and update params if needed
@@ -243,7 +245,7 @@ class Trainer:
             
             if it % self.config.eval_interval == 0:
                 self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
-            
+                
             # forward the model
             if t0 == 0:
                 t0 = time.time()
@@ -275,17 +277,20 @@ class Trainer:
                 fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log
                 
                 fwd_bwd_tokens_per_sec = fwd_bwd_tokens / dt
+                iter_time = dt / iters_since_last_log
                 
                 if it > 0:
                     if running_fwd_bwd_tokens_per_sec==0:
                         running_fwd_bwd_tokens_per_sec = fwd_bwd_tokens_per_sec
-                        running_iter_time = dt
+                        running_iter_time = iter_time
                     else:
                         running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
-                        running_iter_time = 0.9* running_iter_time + 0.1 * dt
+                        running_iter_time = 0.9* running_iter_time + 0.1 * iter_time
 
                 print(f"iter {it}: loss {loss_sum:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
 
+                if it % self.config.eval_interval == 0:
+                    self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr):
         t0 = time.time()
