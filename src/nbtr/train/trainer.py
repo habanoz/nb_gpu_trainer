@@ -235,6 +235,7 @@ class Trainer:
         start_iter = self.state.iter_num
         running_fwd_bwd_tokens_per_sec = 0
         running_iter_time = 0
+        t0 = 0
         
         self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate)
         
@@ -286,7 +287,7 @@ class Trainer:
 
                 print(f"iter {it}: loss {loss_sum:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
 
-                if it % self.config.eval_interval == 0:
+                if it > 0 and it % self.config.eval_interval == 0:
                     self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr):
