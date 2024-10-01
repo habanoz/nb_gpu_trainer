@@ -7,10 +7,10 @@ import math
 @dataclass
 class GPTConfig:
     seq_length: int =  1024
-    vocab_size: int = 8192
-    n_embed: int = 384
-    n_head: int = 6
-    n_layer: int = 6
+    vocab_size: int = 50304
+    n_embed: int = 768
+    n_head: int = 12
+    n_layer: int = 12
     dropout: float = 0.1
 
     @staticmethod
