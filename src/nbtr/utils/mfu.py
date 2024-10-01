@@ -4,10 +4,10 @@ def estimate_mfu( model, fwdbwd_per_iter, dt, flops_promised):
         # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311
         N = model.get_num_params()
         cfg = model.config
-        T = cfg.block_size
+        T = cfg.seq_length
         L = cfg.n_layer
         E = cfg.n_embed
-        # L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd//cfg.n_head, cfg.block_size
+        # L, H, Q, T = cfg.n_layer, cfg.n_head, cfg.n_embd//cfg.n_head, cfg.seq_length
         # flops_per_token = 6*N + 12*L*H*Q*T
         flops_per_token = 6*N + 12*L*E*T
         flops_per_fwdbwd = flops_per_token * T
