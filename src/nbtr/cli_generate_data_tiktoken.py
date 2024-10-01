@@ -5,7 +5,7 @@ import tiktoken
 from datasets import load_dataset
 import os 
 import numpy as np
-import tqdm
+from tqdm import tqdm
 
 def main(ds_repo_id, data_dir):
     enc = tiktoken.get_encoding("gpt2")
