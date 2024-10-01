@@ -1,4 +1,4 @@
-def estimate_mfu(self, model, fwdbwd_per_iter, dt, flops_promised):
+def estimate_mfu( model, fwdbwd_per_iter, dt, flops_promised):
         """ estimate model flops utilization (MFU) """
         # first estimate the number of flops we do per iteration.
         # see PaLM paper Appendix B as ref: https://arxiv.org/abs/2204.02311

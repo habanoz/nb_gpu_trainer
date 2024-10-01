@@ -59,7 +59,7 @@ class Tokenizer:
 
     def encode_training_data(self, dataset, data_dir, value_key="text"):
         assert "train" in dataset, "Dataset does not contain split 'train'!"
-        assert "validation" in dataset, "Dataset does not contain split 'validation'!"
+        assert "val" in dataset, "Dataset does not contain split 'val'!"
 
         dataset = self.encode_all(dataset, value_key=value_key)
 
@@ -67,7 +67,7 @@ class Tokenizer:
             os.makedirs(data_dir)
 
         self._save_ids(dataset,data_dir,"train")
-        self._save_ids(dataset,data_dir,"validation")
+        self._save_ids(dataset,data_dir,"val")
 
     def _save_ids(self, dataset, data_dir, name="train"):
         dataset = dataset[name]

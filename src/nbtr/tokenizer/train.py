@@ -20,7 +20,7 @@ class Trainer:
             os.makedirs(self.out_dir)
         
         len_train = len(ds['train'])
-        len_validation = len(ds['validation'])
+        len_validation = len(ds['val'])
         
         limit_train = max(min(int(len_train * self.ratio), len_train), 100)
         limit_validation = max(min(int(len_validation * self.ratio), len_validation), 0)
@@ -31,7 +31,7 @@ class Trainer:
         with tempfile.NamedTemporaryFile(mode='w',delete=False, encoding="utf-8") as fp:
             for doc in ds['train'].select(range(limit_train)):
                 fp.write(doc['text'])
-            for doc in ds['validation'].select(range(limit_validation)):
+            for doc in ds['val'].select(range(limit_validation)):
                 fp.write(doc['text'])
             fp.flush()
             training_file_name = fp.name

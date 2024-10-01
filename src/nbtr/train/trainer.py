@@ -119,7 +119,7 @@ class Trainer:
         if split == 'train':
             data = np.memmap(os.path.join(self.config.data_dir, 'train.bin'), dtype=np.uint16, mode='r')
         else:
-            data = np.memmap(os.path.join(self.config.data_dir, 'validation.bin'), dtype=np.uint16, mode='r')
+            data = np.memmap(os.path.join(self.config.data_dir, 'val.bin'), dtype=np.uint16, mode='r')
         
         ix = torch.randint(len(data) - self.config.seq_length, (self.config.batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+self.config.seq_length]).astype(np.int64)) for i in ix])
