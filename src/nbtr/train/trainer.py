@@ -9,6 +9,7 @@ import datetime
 from transformers.trainer import Trainer
 from collections import defaultdict
 from typing import Any, Dict
+from ..utils.mfu import estimate_mfu
 
 DEVICE="cuda"
 
@@ -39,6 +40,8 @@ class TrainerConfig:
     wandb_run_id: str = None
     grad_norm_clip: float = 1.0
     dtype: str = 'bfloat16'
+    promised_flops=65e12
+    
 
     @staticmethod
     def from_yaml(config_file:str):
@@ -235,6 +238,7 @@ class Trainer:
         start_iter = self.state.iter_num
         running_fwd_bwd_tokens_per_sec = 0
         running_iter_time = 0
+        mfu = 0
         t0 = 0
         
         self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate)
@@ -284,8 +288,10 @@ class Trainer:
                     else:
                         running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
                         running_iter_time = 0.9* running_iter_time + 0.1 * iter_time
-
-                print(f"iter {it}: loss {loss_sum:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}")
+                    
+                    mfu = estimate_mfu(model=model,fwdbwd_per_iter=self.config.batch_size * self.config.gradient_accumulation_steps, flops_promised=self.config.promised_flops,dt=iter_time)
+                    
+                print(f"iter {it}: loss {loss_sum:.4f}, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu}")
 
                 if it > 0 and it % self.config.eval_interval == 0:
                     self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
