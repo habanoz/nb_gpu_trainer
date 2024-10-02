@@ -43,7 +43,7 @@ class TrainerConfig:
     log_interval: int = 10
     eval_interval: int = 250 # must be multiple of log interval
     eval_iters: int = 200
-    promised_flops=65e12 # Tesla T4 on fp16
+    promised_flops:float=65e12 # Tesla T4 on fp16
     ## wandb logging
     wandb_log: bool = False
     wandb_project: str = "GPT Training"
