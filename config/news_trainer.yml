@@ -21,7 +21,7 @@ beta2: 0.99
 log_interval: 10
 eval_interval: 250 # must be multiple of log interval
 eval_iters: 200
-promised_flops : 65e12 # Tesla T4 on fp16
+promised_flops : 65e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
 wandb_project: NB-Haber-GPT-Training

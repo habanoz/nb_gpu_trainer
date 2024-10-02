@@ -88,7 +88,7 @@ class Trainer:
         assert dtype!=torch.bfloat16 or torch.cuda.is_bf16_supported(), "Bfloat data type is selected but it is not supported! Replace it with float16 data type."
         assert self.config.eval_interval % self.config.log_interval == 0, "Eval interval must be a multiple of log interval!"
 
-        self.ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
+        self.ctx = torch.amp.autocast(device_type=DEVICE, dtype=dtype)
         
         ## internal state
         self.skip_first_new_best_val_loss = True
@@ -237,7 +237,7 @@ class Trainer:
             
         self._init_logging()
 
-        scaler = torch.cuda.amp.GradScaler(enabled=(self.config.dtype == 'float16'))
+        scaler = torch.amp.GradScaler(DEVICE, enabled=(self.config.dtype == 'float16'))
         optimizer = self._configure_optimizers(model)
 
         # start training
