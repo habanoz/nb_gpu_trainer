@@ -46,14 +46,14 @@ class HfModel():
         
     @staticmethod
     def from_pretrained(repo_id, device:str='cuda'):
-        hf_cfg = HfModelConfig.from_pretrained(repo_id)
-        hf_model = HfModel(hf_cfg)
-        hf_model.to(device=device)
-
         # update model state with the latest state from the repo
         model_file = cached_file(repo_id, FILE_NAME, _raise_exceptions_for_missing_entries=True)
         model_state = torch.load(model_file, torch.device(device))
 
+        hf_cfg = HfModelConfig.from_pretrained(repo_id)
+        hf_model = HfModel(hf_cfg)
+        hf_model.to(device=device)
+        
         hf_model._model.load_state_dict(model_state)
         print("Restored model state from repository!")
 

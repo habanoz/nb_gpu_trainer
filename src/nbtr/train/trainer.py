@@ -15,34 +15,44 @@ DEVICE="cuda"
 
 @dataclass
 class TrainerConfig:
+    seed: int = 145
+    
     seq_length: int = 1024
-    gradient_accumulation_steps:int = 1
-    batch_size: int = 64
+    gradient_accumulation_steps:int = 4
+    batch_size: int = 8
     data_dir: str = None
-    warmup_iters: int = 100
-    learning_rate: float = 1e-4
-    lr_decay_iters: int = 5000 
     max_iters: int = 5000
+    warmup_iters: int = 100
+    grad_norm_clip: float = 1.0
+    out_dir:str = None
+    dtype: str = 'bfloat16'
+    compile: bool=False
+        
+    # learning rate
+    learning_rate: float = 1e-4
+    decay_lr: bool = True
+    lr_decay_iters: int = field(default=None) # if None use max_iters
     min_lr: float = 1e-6
+    
+    # optimizer
     weight_decay: float = None
     beta1: float = 0.9
     beta2: float= 0.95
-    compile: bool=False
-    decay_lr: bool = True
-    seed: int = 145
+    
+    # logging
     log_interval: int = 10
-    eval_interval: int = 250
+    eval_interval: int = 250 # must be multiple of log interval
     eval_iters: int = 200
-    out_dir:str = None
+    promised_flops=65e12 # Tesla T4 on fp16
+    ## wandb logging
     wandb_log: bool = False
     wandb_project: str = "GPT Training"
     wandb_run_name: str = "run1"
     wandb_run_id: str = None
-    grad_norm_clip: float = 1.0
-    dtype: str = 'bfloat16'
-    promised_flops=65e12
     
-
+    def __post_init__(self):
+        self.lr_decay_iters = self.lr_decay_iters if self.lr_decay_iters else self.max_iters
+    
     @staticmethod
     def from_yaml(config_file:str):
         import yaml
@@ -76,6 +86,7 @@ class Trainer:
 
         assert torch.cuda.is_available(), "Cuda is not available. This training script requires an NVIDIA GPU!"
         assert dtype!=torch.bfloat16 or torch.cuda.is_bf16_supported(), "Bfloat data type is selected but it is not supported! Replace it with float16 data type."
+        assert self.config.eval_interval % self.config.log_interval == 0, "Eval interval must be a multiple of log interval!"
 
         self.ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
         
