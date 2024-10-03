@@ -54,23 +54,24 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
     hf_train(hf_trainer_config, hf_model)
 
 def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
-    trainer = Trainer(hf_trainer_config.trainer_config)
     
     if os.getenv("RANK",-1)==-1:
         setup_logging()
-        
+        trainer = Trainer(hf_trainer_config.trainer_config)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer)
         trainer.train(hf_model=hf_model)
     else:
         ## DDP training
         dist.init_process_group("nccl")
         rank = dist.get_rank()
+        rank = rank % torch.cuda.device_count()
         
         setup_logging(rank=rank)
         torch.cuda.set_device(rank)
         
-        trainer = DDPTrainer(trainer=trainer)
-        trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, rank=rank, trainer=trainer)
+        trainer = Trainer(hf_trainer_config.trainer_config, rank=rank)
+        trainer = DDPTrainer(trainer=trainer, rank=rank)
+        trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer, rank=rank)
         trainer.train(hf_model=hf_model)
         
         dist.destroy_process_group()

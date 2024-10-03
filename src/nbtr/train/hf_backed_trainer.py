@@ -43,15 +43,15 @@ class HFBackedTrainer:
     def add_callback(self, event: TrainerEvent, callback):
         self.trainer.add_callback(event, callback)
         
-    def train(self, hf_model:HfModel, raw_model: Module=None):
+    def train(self, hf_model:HfModel):
         assert isinstance(hf_model, HfModel)
-        model = raw_model if raw_model else hf_model.model
+        model = hf_model.model
         
         if self.rank == 0:
             self.hf_trainer_config.save_pretrained(push_to_hub=True)
             hf_model.config.save_pretrained(self.config.out_dir, repo_id=self.hf_trainer_config.repo_id, push_to_hub=True)
 
-        super().train(model=model, raw_model=raw_model)
+        super().train(model=model)
 
         # wait until jobs are complete
         self.executor.shutdown()
