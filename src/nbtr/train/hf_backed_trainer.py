@@ -1,69 +1,60 @@
 from nbtr.model.hf_trainer_config import HfTrainerConfig
-from .trainer import Trainer, TrainerConfig
+from .trainer import Trainer, TrainerEvent
 from nbtr.model.hf_trainer_state import HFTrainerState
 from nbtr.model.hf_model import HfModel
 import os
 from torch.nn import Module
-import torch.nn as nn
 from huggingface_hub import HfApi
 from concurrent.futures import ThreadPoolExecutor
 
-class HFBackedTrainer(Trainer):
+import logging
+
+logger = logging.getLogger(__name__)
+
+class HFBackedTrainer:
     num_workers = 2
-    def __init__(self, hf_trainer_config:HfTrainerConfig) -> None:
+    def __init__(self, hf_trainer_config:HfTrainerConfig, trainer, rank:int = 0) -> None:
         assert hf_trainer_config.repo_id is not None, "Repo id cannot be None"
 
         self.hf_trainer_config = hf_trainer_config
-
+        self.rank = rank
         self.api = HfApi()
 
         trainer_state = None
 
         if self.api.repo_exists(repo_id=hf_trainer_config.repo_id):
-            print(f"Found existing repo!")
+            logger.info(f"Found existing repo!")
             hf_trainer_state = HFTrainerState.from_pretrained_or_none(hf_trainer_config)
             if hf_trainer_state is not None:
                 trainer_state = hf_trainer_state.state
-                print("Resume training...")
-        else:
+                logger.info("Resume training...")
+        elif rank==0:
             repo = self.api.create_repo(repo_id=hf_trainer_config.repo_id, private=True, exist_ok=True)
-            print(f"New training. Created repo {repo}")
+            logger.info(f"New training. Created repo {repo}")
 
-        super().__init__(config=hf_trainer_config.trainer_config, state=trainer_state)
+        self.trainer = trainer
+        self.trainer.state = trainer_state
         
-        self.add_callback("on_new_best_val_loss", lambda trainer, model : self.do_on_eval(model))
+        if rank==0:
+            self.add_callback(TrainerEvent.ON_NEW_BEST_VAL_LOSS, lambda trainer, model : self.do_on_eval(model))
+            
         self.executor = ThreadPoolExecutor(max_workers=self.num_workers)
-
-    """@staticmethod
-    def from_config(config_file):
-        import yaml
-
-        with open(config_file) as f:
-            try:
-                doc = yaml.safe_load(f)
-            except yaml.YAMLError as exc:
-                print(exc)
-                exit(1)
-        
-        trainer_config = TrainerConfig(**doc)
-        hf_trainer_config = HfTrainerConfig(,trainer_config=trainer_config)
-        return HFBackedTrainer(hf_trainer_config=hf_trainer_config)"""
     
-    def train(self, hf_model:HfModel):
-        assert isinstance(hf_model, HfModel)
-        model = hf_model.model
+    def add_callback(self, event: TrainerEvent, callback):
+        self.trainer.add_callback(event, callback)
         
-        self.hf_trainer_config.save_pretrained(push_to_hub=True)
-        hf_model.config.save_pretrained(self.config.out_dir, repo_id=self.hf_trainer_config.repo_id, push_to_hub=True)
+    def train(self, hf_model:HfModel, raw_model: Module=None):
+        assert isinstance(hf_model, HfModel)
+        model = raw_model if raw_model else hf_model.model
+        
+        if self.rank == 0:
+            self.hf_trainer_config.save_pretrained(push_to_hub=True)
+            hf_model.config.save_pretrained(self.config.out_dir, repo_id=self.hf_trainer_config.repo_id, push_to_hub=True)
 
-        super().train(model=model)
+        super().train(model=model, raw_model=raw_model)
 
         # wait until jobs are complete
         self.executor.shutdown()
-
-    def _upload_file(self, file_to_upload, target_path):
-        self.api.upload_file(path_or_fileobj=file_to_upload, path_in_repo=target_path, repo_id=self.hf_trainer_config.repo_id)
-        print(f"Completed {file_to_upload}")
 
     def do_on_eval(self, model:Module):
         if not os.path.exists(self.config.out_dir):

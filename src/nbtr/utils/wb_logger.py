@@ -1,0 +1,33 @@
+import wandb
+
+class WandBLogger:
+    def __init__(self, enabled, project, id, name, config=None):
+        self.enabled = enabled
+        self.project = project
+        self.id = id
+        self.name = name
+        self.config = config if config else {}
+        self.run = None
+
+    def __enter__(self):
+        if self.enabled:
+            self.run = wandb.init(
+                project=self.project,
+                name=self.name,
+                id=self.id,
+                resume="allow",
+                config=self.config
+            )
+        return self
+
+    def __exit__(self):
+        if self.run:
+            self.run.finish()
+
+    def log(self, **kwargs):
+        if self.run:
+            self.run.log(kwargs)
+
+    def summary(self, **kwargs):
+        if self.run:
+            self.run.summary(**kwargs)

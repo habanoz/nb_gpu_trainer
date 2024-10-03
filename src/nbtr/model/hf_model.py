@@ -6,26 +6,27 @@ import torch
 import torch.nn as nn
 import os
 from typing import Optional
+from .trainer_model import TrainerModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 FILE_NAME = 'pytorch_model.bin'
 
-class HfModel():
+class HfModel(TrainerModel):
     config_class = HfModelConfig
     def __init__(self, hf_model_config:HfModelConfig):
-        super().__init__()
-        self._model = GPT(config=hf_model_config.gpt_config)
+        _model = GPT(config=hf_model_config.gpt_config)
         self._config = hf_model_config
-
+        
+        super().__init__(_model)
+        
     def forward(self, x, y):
-        logits, loss =  self._model(x,y)
+        logits, loss =  self.model(x,y)
         return {'logits':logits, 'loss':loss}
     
     def to(self, device:str):
-        self._model.to(device)
-
-    @property
-    def model(self):
-        return self._model
+        self.model.to(device)
     
     @property
     def config(self):
@@ -38,7 +39,7 @@ class HfModel():
         push_to_hub: bool = True
     ):  
         self._config.save(save_directory)
-        HfModel.save(self._model, save_directory)
+        HfModel.save(self.model, save_directory)
 
         if push_to_hub:
             self._config.upload_saved(save_directory, repo_id=repo_id)
@@ -54,8 +55,8 @@ class HfModel():
         hf_model = HfModel(hf_cfg)
         hf_model.to(device=device)
         
-        hf_model._model.load_state_dict(model_state)
-        print("Restored model state from repository!")
+        hf_model.model.load_state_dict(model_state)
+        logging.info("Restored model state from repository!")
 
         return hf_model
     
@@ -64,7 +65,7 @@ class HfModel():
         try:
             return HfModel.from_pretrained(repo_id=repo_id, device=device)
         except Exception as e:
-            print("Unable to get model state from repo! Training from scratch!!!", e)
+            logging.warning("Unable to get model state from repo! Training from scratch!!!", e)
         
         model = HfModel(hf_model_config=hf_model_config)
         model.to(device)
@@ -80,7 +81,7 @@ class HfModel():
         try:
             HfApi().upload_file(path_or_fileobj=HfModel._get_path(save_directory), path_in_repo=FILE_NAME, repo_id=repo_id)
         except Exception as e:
-            print("Uploading model failed!", e)
+            logger.warning("Uploading model failed! "+str(e))
     
     @staticmethod
     def _get_path(save_directory:str):

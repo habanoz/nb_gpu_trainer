@@ -6,10 +6,15 @@ import os
 import math
 import time
 import datetime
-from transformers.trainer import Trainer
 from collections import defaultdict
 from typing import Any, Dict
 from ..utils.mfu import estimate_mfu
+from enum import Enum
+from ..model.trainer_model import TrainerModel
+from nbtr.utils.wb_logger import WandBLogger
+import logging
+
+logger = logging.getLogger(__name__)
 
 DEVICE="cuda"
 
@@ -73,10 +78,17 @@ class EvalResult:
     loss: float
     perplexity: float
 
-
+class TrainerEvent(Enum):
+    ON_NEW_BEST_VAL_LOSS=0,
+    ON_LAST_MICRO_BATCH=1,
+    
 class Trainer:
-    def __init__(self, config:TrainerConfig, state:TrainingState=None) -> None:
+    def __init__(self, config:TrainerConfig, rank:int=0, world_size:int=1, state:TrainingState=None) -> None:
         self.config = config
+        
+        self.rank = rank
+        self.world_size = world_size
+        
         self.state = state if state is not None else TrainingState()
         assert self.state.iter_num < config.max_iters
 
@@ -93,36 +105,24 @@ class Trainer:
         ## internal state
         self.skip_first_new_best_val_loss = True
     
-
-    def add_callback(self, onevent: str, callback):
+    def set_state(self, state: TrainingState):
+        self.state =  state
+        
+    def add_callback(self, onevent: TrainerEvent, callback):
         self.callbacks[onevent].append(callback)
 
-    def set_callback(self, onevent: str, callback):
+    def set_callback(self, onevent: TrainerEvent, callback):
         self.callbacks[onevent] = [callback]
 
-    def trigger_callbacks(self, onevent: str, model):
+    def trigger_callbacks(self, onevent: TrainerEvent, model):
         for callback in self.callbacks.get(onevent, []):
             callback(self, model)
 
     def on_new_best_val_loss(self, model:nn.Module):
         if not self.skip_first_new_best_val_loss:
-            self.trigger_callbacks("on_new_best_val_loss", model)
+            self.trigger_callbacks(TrainerEvent.ON_NEW_BEST_VAL_LOSS, model)
         else:
-            self.skip_first_new_best_val_loss = False 
-        
-    """     @staticmethod
-    def from_config(config_file):
-        import yaml
-
-        with open(config_file) as f:
-            try:
-                doc = yaml.safe_load(f)
-            except yaml.YAMLError as exc:
-                print(exc)
-                exit(1)
-        
-        config = TrainerConfig(**doc)
-        return Trainer(config) """
+            self.skip_first_new_best_val_loss = False
 
     def get_batch(self, split):
         # We recreate np.memmap every batch to avoid a memory leak, as per
@@ -188,8 +188,8 @@ class Trainer:
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
 
-        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+        logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        logging.info(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
         
         betas = (self.config.beta1, self.config.beta2)
         optimizer = torch.optim.AdamW(optim_groups, lr=self.config.learning_rate, betas=betas, fused=True)
@@ -200,7 +200,7 @@ class Trainer:
         return optimizer
     
     def _init_logging(self):
-        if self.config.wandb_log:
+        if self.config.wandb_log and self.rank==0:
             import wandb
             # wandb.require("core")
             wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, resume="allow", config=asdict(self.config))
@@ -222,7 +222,8 @@ class Trainer:
         model.train()
         return out
 
-    def train(self, model:nn.Module):
+    def train(self, model:TrainerModel, compile:bool=None):
+        
         # assert model.device == DEVICE, f"Only CUDA device is supported for training. Model is in :{model.device}"
         assert self.config.seq_length == model.config.seq_length, f"Sequence length for model and trainer is not equal {self.config.seq_length}!={model.config.seq_length}"
 
@@ -230,97 +231,99 @@ class Trainer:
         torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
-        if self.config.compile:
-            print("compiling the model...")
+        if (compile is None and self.config.compile) or compile:
+            logging.info("compiling the model...")
             model = torch.compile(model)
-            print("compiling the model done!")
-            
-        self._init_logging()
-
+            logging.info("compiling the model done!")
+        
         scaler = torch.amp.GradScaler(DEVICE, enabled=(self.config.dtype == 'float16'))
         optimizer = self._configure_optimizers(model)
 
         # start training
         model.train()
-    
-        # fetch the very first batch
-        X, Y = self.get_batch('train')
         
-        start_iter = self.state.iter_num
-        running_fwd_bwd_tokens_per_sec = 0
-        running_iter_time = 0
-        mfu = 0
-        t0 = 0
+        with self.init_logger() as wb_run:
         
-        self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate)
-        
-        for it in range(start_iter, self.config.max_iters+1):
+            # fetch the very first batch
+            X, Y = self.get_batch('train')
             
-            # determine current lr rate and update params if needed
-            lr = self.update_lr(it, optimizer)
-
-            # forward the model
-            if t0 == 0:
-                t0 = time.time()
-            for _ in range(self.config.gradient_accumulation_steps):
-                with self.ctx:
-                    _, loss = model(X, Y)
-                    loss = loss / self.config.gradient_accumulation_steps
-
-                # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                X, Y = self.get_batch('train')
-
-                scaler.scale(loss).backward()
-
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
+            start_iter = self.state.iter_num
+            running_fwd_bwd_tokens_per_sec = 0
+            running_iter_time = 0
+            mfu = 0
+            t0 = 0
             
-            scaler.step(optimizer)
-            scaler.update()
+            self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run)
+            
+            for it in range(start_iter, self.config.max_iters+1):
+                
+                # determine current lr rate and update params if needed
+                lr = self.update_lr(it, optimizer)
 
-            optimizer.zero_grad(set_to_none=True)
+                # forward the model
+                if t0 == 0:
+                    t0 = time.time()
+                for _ in range(self.config.gradient_accumulation_steps):
+                    with self.ctx:
+                        _, loss = model(X, Y)
+                        loss = loss / self.config.gradient_accumulation_steps
 
-            if it % self.config.log_interval == 0:
-                loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
+                    # immediately async prefetch next batch while model is doing the forward pass on the GPU
+                    X, Y = self.get_batch('train')
+
+                    scaler.scale(loss).backward()
+
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
                 
-                dt = time.time() - t0
-                t0 = 0
-                            
-                iters_since_last_log = self.config.log_interval if it > 0 else 1
-                fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log
-                
-                fwd_bwd_tokens_per_sec = fwd_bwd_tokens / dt
-                iter_time = dt / iters_since_last_log
-                
-                if it > 0:
-                    if running_fwd_bwd_tokens_per_sec==0:
-                        running_fwd_bwd_tokens_per_sec = fwd_bwd_tokens_per_sec
-                        running_iter_time = iter_time
-                    else:
-                        running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
-                        running_iter_time = 0.9* running_iter_time + 0.1 * iter_time
+                scaler.step(optimizer)
+                scaler.update()
+
+                optimizer.zero_grad(set_to_none=True)
+
+                if it % self.config.log_interval == 0:
+                    loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
                     
-                    mfu = estimate_mfu(model=model,fwdbwd_per_iter=self.config.batch_size * self.config.gradient_accumulation_steps, flops_promised=self.config.promised_flops,dt=iter_time)
+                    dt = time.time() - t0
+                    t0 = 0
+                                
+                    iters_since_last_log = self.config.log_interval if it > 0 else 1
+                    fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log
                     
-                print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
+                    fwd_bwd_tokens_per_sec = fwd_bwd_tokens / dt
+                    iter_time = dt / iters_since_last_log
+                    
+                    if it > 0:
+                        if running_fwd_bwd_tokens_per_sec==0:
+                            running_fwd_bwd_tokens_per_sec = fwd_bwd_tokens_per_sec
+                            running_iter_time = iter_time
+                        else:
+                            running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
+                            running_iter_time = 0.9* running_iter_time + 0.1 * iter_time
+                        
+                        mfu = estimate_mfu(model=model,fwdbwd_per_iter=self.config.batch_size * self.config.gradient_accumulation_steps, flops_promised=self.config.promised_flops,dt=iter_time)
+                        
+                    logging.info(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
-                if it > 0 and it % self.config.eval_interval == 0:
-                    self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr)
+                    if it > 0 and it % self.config.eval_interval == 0:
+                        self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run)
 
-    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr):
+    def init_logger(self):
+        return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config))
+
+    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run):
         t0 = time.time()
         eval_out = self.evaluate(model)
                 
-        if self.config.wandb_log:
-            import wandb
-            wandb.log({
-                        "iter": it,
-                        "train/loss": eval_out['train'].loss,
-                        "val/loss": eval_out['val'].perplexity,
-                        "val/perplexity": eval_out['val'].perplexity,
-                        "lr": lr,
-                        "tokens/sec": running_fwd_bwd_tokens_per_sec,
-                    })
+        wb_run.log({
+                    "iter": it,
+                    "train/loss": eval_out['train'].loss,
+                    "val/loss": eval_out['val'].perplexity,
+                    "val/perplexity": eval_out['val'].perplexity,
+                    "lr": lr,
+                    "tokens/sec": running_fwd_bwd_tokens_per_sec,
+                })
+            
         
         new_val_loss = eval_out['val'].loss
         if  new_val_loss < self.state.best_val_loss:
@@ -343,4 +346,4 @@ class Trainer:
         else:
             eta = 0.0
 
-        print(f"Eval iter {it}: train loss {eval_out['train'].loss:.4f}, val loss {eval_out['val'].loss:.4f}, val perplexity {eval_out['val'].perplexity:.4f}, ETA {datetime.timedelta(seconds=eta)}")
+        logging.info(f"Eval iter {it}: train loss {eval_out['train'].loss:.4f}, val loss {eval_out['val'].loss:.4f}, val perplexity {eval_out['val'].perplexity:.4f}, ETA {datetime.timedelta(seconds=eta)}")

@@ -5,6 +5,9 @@ from nbtr.train.trainer import TrainingState
 import torch
 import os
 
+import logging
+
+logger = logging.getLogger(__name__)
 
 FILE_NAME = "trainer_state.bin"
 
@@ -32,7 +35,7 @@ class HFTrainerState:
         try:
             HfApi().upload_file(path_or_fileobj=self._get_path(), path_in_repo=FILE_NAME, repo_id=self.config.repo_id)
         except Exception as e:
-            print("Upladoing state failed",e)
+            logger.warning("Uploading state failed:"+str(e))
         
     def _get_path(self):
         return os.path.join(self.config.trainer_config.out_dir, FILE_NAME)
