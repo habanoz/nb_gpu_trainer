@@ -33,7 +33,7 @@ class HFBackedTrainer:
             logger.info(f"New training. Created repo {repo}")
 
         self.trainer = trainer
-        self.trainer.state = trainer_state
+        self.trainer.set_state(trainer_state)
         
         if rank==0:
             self.add_callback(TrainerEvent.ON_NEW_BEST_VAL_LOSS, lambda trainer, model : self.do_on_eval(model))

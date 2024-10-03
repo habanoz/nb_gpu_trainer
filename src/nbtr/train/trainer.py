@@ -16,8 +16,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-DEVICE="cuda"
-
 @dataclass
 class TrainerConfig:
     seed: int = 145
@@ -88,6 +86,7 @@ class Trainer:
         
         self.rank = rank
         self.world_size = world_size
+        self.device = "cuda" if world_size == 1 else f"cuda:{rank}"
         
         self.state = state if state is not None else TrainingState()
         assert self.state.iter_num < config.max_iters
@@ -100,7 +99,7 @@ class Trainer:
         assert dtype!=torch.bfloat16 or torch.cuda.is_bf16_supported(), "Bfloat data type is selected but it is not supported! Replace it with float16 data type."
         assert self.config.eval_interval % self.config.log_interval == 0, "Eval interval must be a multiple of log interval!"
 
-        self.ctx = torch.amp.autocast(device_type=DEVICE, dtype=dtype)
+        self.ctx = torch.amp.autocast(device_type="cuda", dtype=dtype)
         
         ## internal state
         self.skip_first_new_best_val_loss = True
@@ -137,8 +136,8 @@ class Trainer:
         y = torch.stack([torch.from_numpy((data[i+1:i+1+self.config.seq_length]).astype(np.int64)) for i in ix])
         
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x = x.pin_memory().to(DEVICE, non_blocking=True)
-        y = y.pin_memory().to(DEVICE, non_blocking=True)
+        x = x.pin_memory().to(self.device, non_blocking=True)
+        y = y.pin_memory().to(self.device, non_blocking=True)
 
         return x, y
 
@@ -236,7 +235,7 @@ class Trainer:
             model = torch.compile(model)
             logging.info("compiling the model done!")
         
-        scaler = torch.amp.GradScaler(DEVICE, enabled=(self.config.dtype == 'float16'))
+        scaler = torch.amp.GradScaler(self.device, enabled=(self.config.dtype == 'float16'))
         optimizer = self._configure_optimizers(model)
 
         # start training

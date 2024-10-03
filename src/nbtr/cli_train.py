@@ -6,6 +6,7 @@ from nbtr.model.hf_trainer_config import HfTrainerConfig
 from nbtr.model.hf_model_config import HfModelConfig
 from nbtr.model.gpt2 import GPTConfig
 import torch.distributed as dist
+import torch
 from dataclasses import replace
 import argparse
 import os
@@ -66,6 +67,7 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
         rank = dist.get_rank()
         
         setup_logging(rank=rank)
+        torch.cuda.set_device(rank)
         
         trainer = DDPTrainer(trainer=trainer)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, rank=rank, trainer=trainer)
