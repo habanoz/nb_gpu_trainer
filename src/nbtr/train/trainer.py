@@ -260,23 +260,28 @@ class Trainer:
                 # determine current lr rate and update params if needed
                 lr = self.update_lr(it, optimizer)
                 
-                print(f"{it} started")
+                print(f"{it} started:"+str(self.config.gradient_accumulation_steps))
                 
                 # forward the model
                 if t0 == 0:
                     t0 = time.time()
                 for micro_batch in range(self.config.gradient_accumulation_steps):
-                    print(f"{micro_batch} batch ended")
+                    print(f"{micro_batch} batch started")
                     if micro_batch == self.config.gradient_accumulation_steps - 1:
                         self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
-                    with self.ctx:
-                        _, loss = model(X, Y)
-                        loss = loss / self.config.gradient_accumulation_steps
-
+                    try:
+                        with self.ctx:
+                            _, loss = model(X, Y)
+                            loss = loss / self.config.gradient_accumulation_steps
+                    except Exception as e:
+                        print("Error:"+str(e))
+                        
                     # immediately async prefetch next batch while model is doing the forward pass on the GPU
                     X, Y = self.get_batch('train')
 
                     scaler.scale(loss).backward()
+                
+                print(f"{it} loop ended:")
                 
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
