@@ -44,11 +44,6 @@ class HFBackedTrainer:
         assert isinstance(hf_model, HfModel)
         model = hf_model.model
         
-        if self.rank == 0:
-            self.hf_trainer_config.save_pretrained(push_to_hub=True)
-            out_dir = self.hf_trainer_config.trainer_config.out_dir
-            hf_model.config.save_pretrained(out_dir, repo_id=self.hf_trainer_config.repo_id, push_to_hub=True)
-
         self.trainer.train(model=model, raw_model=model)
 
         # wait until jobs are complete

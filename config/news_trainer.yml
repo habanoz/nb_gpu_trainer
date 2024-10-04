@@ -2,7 +2,7 @@
 seq_length: 1024
 gradient_accumulation_steps: 1
 batch_size: 8
-max_iters : 20
+max_iters : 60
 warmup_iters: 1
 dtype: float16
 compile: False
@@ -19,7 +19,7 @@ beta2: 0.99
 
 # logging
 log_interval: 10
-eval_interval: 250 # must be multiple of log interval
+eval_interval: 30 # must be multiple of log interval
 eval_iters: 1
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging

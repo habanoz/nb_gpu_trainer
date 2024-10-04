@@ -26,6 +26,7 @@ class HfModelConfig():
         self.save(out_dir)
 
         if push_to_hub:
+            HfApi().create_repo(repo_id=repo_id, private=True, exist_ok=True)
             self.upload_saved(out_dir, repo_id)
 
     @staticmethod

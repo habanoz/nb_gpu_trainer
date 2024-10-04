@@ -7,10 +7,9 @@ import json
 
 FILE_NAME = "trainer.json"
 
-
 class HfTrainerConfig():
     def __init__(self, repo_id: str, trainer_config: TrainerConfig):
-        assert "/" in repo_id, "Repo is must be in the form `user/repo_name`"
+        assert "/" in repo_id, f"Repo ID '{repo_id}' is must be in the form `user/repo_name`"
         
         self.repo_id = repo_id
         self._trainer_config = trainer_config
@@ -19,7 +18,7 @@ class HfTrainerConfig():
             out_dir = repo_id.split("/")[-1]
             self._trainer_config = replace(self._trainer_config, out_dir=out_dir)
 
-        assert trainer_config.data_dir is not None
+        assert trainer_config.data_dir is not None, "Data dir cannot be None"
 
         super().__init__()
 
@@ -34,16 +33,16 @@ class HfTrainerConfig():
         self.save()
 
         if push_to_hub:
+            HfApi().create_repo(repo_id=self.repo_id, private=True, exist_ok=True)
             self.upload_saved()
 
     @staticmethod
     def from_pretrained(repo_id):
-        config_file = cached_file(
-            repo_id, FILE_NAME, _raise_exceptions_for_missing_entries=True)
+        config_file = cached_file(repo_id, FILE_NAME, _raise_exceptions_for_missing_entries=True)
         with open(config_file) as f:
             doc = json.load(f)
 
-        return HfTrainerConfig(repo_id=repo_id, trainer_config=TrainerConfig(**doc))
+        return HfTrainerConfig(repo_id=repo_id, trainer_config=TrainerConfig(**doc['trainer_config']))
 
     def save(self):
         if not os.path.exists(self.trainer_config.out_dir):

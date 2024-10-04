@@ -7,14 +7,14 @@ from nbtr.model.hf_model_config import HfModelConfig
 from nbtr.model.gpt2 import GPTConfig
 import torch.distributed as dist
 import torch
-from dataclasses import replace
+from dataclasses import replace, asdict
 import argparse
 import os
 
 def main_with_repo_id(repo_id, hf_training_config, hf_model_config):
     hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
     
-    hf_train(hf_training_config, hf_model)
+    hf_train(hf_training_config, hf_model.config, hf_model, False)
 
 def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, extras:dict):
     trainer_config = TrainerConfig.from_yaml(trainer_config_file)
@@ -33,25 +33,27 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
 
     hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config)
     
-    # push config files to the hub
-    hf_trainer_config.save_pretrained(push_to_hub=True)
-    out_dir = hf_trainer_config.trainer_config.out_dir
-    hf_model_config.save_pretrained(out_dir, repo_id=hf_trainer_config.repo_id, push_to_hub=True)
-    
-    hf_train(hf_trainer_config, hf_model)
+    hf_train(hf_trainer_config, hf_model_config, hf_model, True)
 
-def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
+def hf_train(hf_trainer_config:HfTrainerConfig, hf_model_config:HfModelConfig, hf_model:HfModel, save_config:bool):
+
+    print("Model config:", hf_model_config._to_dict())
+    print("Training config:", hf_trainer_config._to_dict())
+
     if os.getenv("RANK",-1)==-1:
-        hf_train_local(hf_trainer_config, hf_model)
+        hf_train_local(hf_trainer_config, hf_model_config, hf_model, save_config)
     else:
-        hf_train_ddp(hf_trainer_config, hf_model)
+        hf_train_ddp(hf_trainer_config, hf_model_config, hf_model, save_config)
 
-def hf_train_ddp(hf_trainer_config, hf_model):
+def hf_train_ddp(hf_trainer_config, hf_model_config:HfModelConfig, hf_model, save_config:bool):
     dist.init_process_group("nccl")
     
     rank = dist.get_rank()
     rank = rank % torch.cuda.device_count()
-        
+    
+    if rank == 0 and save_config:
+        save_configs(hf_trainer_config, hf_model_config)
+    
     torch.cuda.set_device(rank)
         
     trainer = Trainer(hf_trainer_config.trainer_config, rank=rank, world_size=dist.get_world_size())
@@ -59,6 +61,8 @@ def hf_train_ddp(hf_trainer_config, hf_model):
     trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer, rank=rank)
         
     hf_model.to(rank)
+
+    dist.barrier()
         
     try:
         trainer.train(hf_model=hf_model)
@@ -70,10 +74,13 @@ def hf_train_ddp(hf_trainer_config, hf_model):
     if rank == 0:
         print(f"Training completed.")
 
-def hf_train_local(hf_trainer_config, hf_model):
+def hf_train_local(hf_trainer_config, hf_model_config:HfModelConfig, hf_model, save_config:bool):
     trainer = Trainer(hf_trainer_config.trainer_config)
     trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer)
-        
+    
+    if save_config:
+        save_configs(hf_trainer_config, hf_model_config)
+
     hf_model.to(device="cuda")
         
     trainer.train(hf_model=hf_model)
@@ -83,14 +90,29 @@ def hf_train_local(hf_trainer_config, hf_model):
 def get_hf_training_config_from_repo(repo_id):
     try:
         return HfTrainerConfig.from_pretrained(repo_id=repo_id)
-    except:
+    except Exception as e:
+        print(f"Error: get_hf_training_config_from_repo {repo_id}: {e=}, {type(e)=}")
         return None
 
 def get_hf_model_config_from_repo(repo_id):
     try:
         return HfModelConfig.from_pretrained(repo_id=repo_id)
-    except:
+    except Exception as e:
+        print(f"Error: get_hf_model_config_from_repo {repo_id}: {e=}, {type(e)=}")
         return None
+
+def save_configs(hf_trainer_config:HfTrainerConfig, hf_model_config:HfModelConfig):
+    assert isinstance(hf_trainer_config, HfTrainerConfig)
+    assert isinstance(hf_model_config, HfModelConfig)
+    
+    # save trainer config
+    hf_trainer_config.save_pretrained(push_to_hub=True)
+    
+    # save model config
+    out_dir = hf_trainer_config.trainer_config.out_dir
+    hf_model_config.save_pretrained(out_dir, repo_id=hf_trainer_config.repo_id, push_to_hub=True)
+
+    print("Configurations are saved.")
     
 if __name__ == '__main__':
     print("RANK", os.getenv("RANK", -1))
@@ -113,17 +135,12 @@ if __name__ == '__main__':
     
     hf_training_config = get_hf_training_config_from_repo(repo_id)
     hf_model_config = get_hf_model_config_from_repo(repo_id)
-    
+
     if (trainer_config_file is None or model_config_file is None)  and (hf_training_config is None or hf_model_config is None):
-        print("This is a brand-new training job. Provide a training configuration file and model configuration file!!!")  
+        print("This is a brand-new training job. Provide training configuration file and model configuration file!!!")  
     elif hf_training_config is not None:
+        if (trainer_config_file is not None or model_config_file is not None):
+            print("Configuration is fetched from the repo. Configuration files are ignored.!!!")
         main_with_repo_id(repo_id, hf_training_config, hf_model_config)
     else:
         main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)
-    
-    # trainer_config_file is not None:
-    #    assert model_config_file is not None
-    #    main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)
-    # else:
-    #    assert len(kv)==0, "Extra values are not supported when resuming from a repo!"
-    #    main_with_repo_id(repo_id)
