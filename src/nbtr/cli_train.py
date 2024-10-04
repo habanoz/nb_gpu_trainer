@@ -51,7 +51,7 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
         trainer.train(hf_model=hf_model)
     else:
         ## DDP training
-        dist.init_process_group("gloo")
+        dist.init_process_group("nccl")
         rank = dist.get_rank()
         rank = rank % torch.cuda.device_count()
         
