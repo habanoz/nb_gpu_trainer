@@ -57,7 +57,7 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
         
         torch.cuda.set_device(rank)
         
-        trainer = Trainer(hf_trainer_config.trainer_config, rank=rank, world_size=torch.cuda.device_count())
+        trainer = Trainer(hf_trainer_config.trainer_config, rank=rank, world_size=dist.get_world_size)
         trainer = DDPTrainer(trainer=trainer, rank=rank)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer, rank=rank)
         
