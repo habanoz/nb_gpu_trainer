@@ -287,6 +287,8 @@ class Trainer:
                 optimizer.zero_grad(set_to_none=True)
                 
                 if self.rank == 0 and it % self.config.log_interval == 0:
+                    print("log entered")
+                    
                     loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
                     
                     dt = time.time() - t0
@@ -295,6 +297,8 @@ class Trainer:
                     iters_since_last_log = self.config.log_interval if it > 0 else 1
                     fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log * self.world_size
                     
+                    print("log entered - 1")
+                    
                     fwd_bwd_tokens_per_sec = fwd_bwd_tokens / dt
                     iter_time = dt / iters_since_last_log
                     
@@ -302,12 +306,17 @@ class Trainer:
                         if running_fwd_bwd_tokens_per_sec==0:
                             running_fwd_bwd_tokens_per_sec = fwd_bwd_tokens_per_sec
                             running_iter_time = iter_time
+                            
+                            print("log entered - 2")
                         else:
                             running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
                             running_iter_time = 0.9* running_iter_time + 0.1 * iter_time
+                            
+                            print("log entered - 3")
                         
+                        print("log entered - 4")
                         mfu = estimate_mfu(model=raw_model,fwdbwd_per_iter=self.config.batch_size * self.config.gradient_accumulation_steps * self.world_size, flops_promised=self.config.promised_flops,dt=iter_time)
-                        
+                    print("log entered - 5")
                     print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
                     if it>0 and it % self.config.eval_interval == 0:
