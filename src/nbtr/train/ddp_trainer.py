@@ -13,7 +13,7 @@ class DDPTrainer():
         self.add_callback(TrainerEvent.ON_LAST_MICRO_BATCH, lambda trainer, model : self.do_on_last_micro(model))
     
     def train(self, model:Module, raw_model:Module):
-        if model.config.compile:
+        if self.trainer.config.compile:
             print("compiling the model...")
             model = torch.compile(model)
             print("compiling the model done!")
