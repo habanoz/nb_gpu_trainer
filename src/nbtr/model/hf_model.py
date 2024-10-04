@@ -7,9 +7,6 @@ import torch.nn as nn
 import os
 from typing import Optional
 from .trainer_model import TrainerModel
-import logging
-
-logger = logging.getLogger(__name__)
 
 FILE_NAME = 'pytorch_model.bin'
 
@@ -48,7 +45,9 @@ class HfModel(TrainerModel):
     @staticmethod
     def from_pretrained(repo_id, device:str='cuda'):
         # update model state with the latest state from the repo
+        print(repo_id, FILE_NAME)
         model_file = cached_file(repo_id, FILE_NAME, _raise_exceptions_for_missing_entries=True)
+        print("torch load", repo_id, FILE_NAME)
         model_state = torch.load(model_file, torch.device(device))
 
         hf_cfg = HfModelConfig.from_pretrained(repo_id)
@@ -56,7 +55,7 @@ class HfModel(TrainerModel):
         hf_model.to(device=device)
         
         hf_model.model.load_state_dict(model_state)
-        logging.info("Restored model state from repository!")
+        print("Restored model state from repository!")
 
         return hf_model
     
@@ -65,7 +64,7 @@ class HfModel(TrainerModel):
         try:
             return HfModel.from_pretrained(repo_id=repo_id, device=device)
         except Exception as e:
-            logging.warning("Unable to get model state from repo! Training from scratch!!!", e)
+            print("Unable to get model state from repo! Training from scratch!!!"+str(e))
         
         model = HfModel(hf_model_config=hf_model_config)
         model.to(device)
@@ -81,7 +80,7 @@ class HfModel(TrainerModel):
         try:
             HfApi().upload_file(path_or_fileobj=HfModel._get_path(save_directory), path_in_repo=FILE_NAME, repo_id=repo_id)
         except Exception as e:
-            logger.warning("Uploading model failed! "+str(e))
+            print("Uploading model failed! "+str(e))
     
     @staticmethod
     def _get_path(save_directory:str):

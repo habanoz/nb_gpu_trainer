@@ -20,14 +20,11 @@ class WandBLogger:
             )
         return self
 
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_value, tb):
         if self.run:
             self.run.finish()
-
-    def log(self, **kwargs):
+        return True
+    
+    def log(self, message):
         if self.run:
-            self.run.log(kwargs)
-
-    def summary(self, **kwargs):
-        if self.run:
-            self.run.summary(**kwargs)
+            self.run.log(message)

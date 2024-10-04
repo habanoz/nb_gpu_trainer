@@ -10,20 +10,7 @@ import torch
 from dataclasses import replace
 import argparse
 import os
-import logging
 
-def setup_logging(rank:int=0):
-    os.makedirs("logs", exist_ok=True)
-    
-    handlers = [logging.FileHandler(f"logs/trainer-{rank}.log"), stream_handler]
-    
-    if rank == 0:
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.INFO)
-        handlers.append(stream_handler)
-
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s', handlers=handlers)
-    
 def main_with_repo_id(repo_id):
     # prepare model
     hf_model = HfModel.from_pretrained(repo_id)
@@ -56,17 +43,15 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
 def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
     
     if os.getenv("RANK",-1)==-1:
-        setup_logging()
         trainer = Trainer(hf_trainer_config.trainer_config)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer)
         trainer.train(hf_model=hf_model)
     else:
         ## DDP training
-        dist.init_process_group("nccl")
+        dist.init_process_group("gloo")
         rank = dist.get_rank()
         rank = rank % torch.cuda.device_count()
         
-        setup_logging(rank=rank)
         torch.cuda.set_device(rank)
         
         trainer = Trainer(hf_trainer_config.trainer_config, rank=rank)
@@ -79,6 +64,8 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
     print("Training completed.")
 
 if __name__ == '__main__':
+    print("RANK", os.getenv("RANK", -1))
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo_id", type=str, required=True, help="Model repository id")
     parser.add_argument("--data_dir", type=str, required=False, help="Data directory override.")
@@ -93,7 +80,7 @@ if __name__ == '__main__':
 
     keys = [extra[i][2:] for i in range(0, len(extra),2)]
     values = [extra[i] for i in range(1, len(extra),2)]
-    kv = {k:v for k,v in zip(keys, values)}
+    kv = {k: int(v) if v.isdigit() else  v for k,v in zip(keys, values)}
     
     if trainer_config_file is not None:
         assert model_config_file is not None

@@ -5,9 +5,6 @@ from nbtr.model.hf_model import HfModel
 from torch.nn import Module
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch
-import logging
-
-logger = logging.getLogger(__name__)
 
 class DDPTrainer():
     def __init__(self, trainer:Trainer, rank:int=0) -> None:
@@ -15,11 +12,11 @@ class DDPTrainer():
         self.rank = rank
         self.add_callback(TrainerEvent.ON_LAST_MICRO_BATCH, lambda trainer, model : self.do_on_last_micro(model))
     
-    def train(self, model:Module):
+    def train(self, model:Module, raw_model:Module):
         if self.model.config.compile:
-            logger.info("compiling the model...")
+            print("compiling the model...")
             model = torch.compile(model)
-            logger.info("compiling the model done!")
+            print("compiling the model done!")
             
         ddp_model = DDP(model, device_ids=[self.rank])
         

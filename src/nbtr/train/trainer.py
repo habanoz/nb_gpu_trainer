@@ -12,9 +12,6 @@ from ..utils.mfu import estimate_mfu
 from enum import Enum
 from ..model.trainer_model import TrainerModel
 from nbtr.utils.wb_logger import WandBLogger
-import logging
-
-logger = logging.getLogger(__name__)
 
 @dataclass
 class TrainerConfig:
@@ -105,6 +102,7 @@ class Trainer:
         self.skip_first_new_best_val_loss = True
     
     def set_state(self, state: TrainingState):
+        assert state is not None, "state cannot be None"
         self.state =  state
         
     def add_callback(self, onevent: TrainerEvent, callback):
@@ -115,7 +113,10 @@ class Trainer:
 
     def trigger_callbacks(self, onevent: TrainerEvent, model):
         for callback in self.callbacks.get(onevent, []):
-            callback(self, model)
+            try:
+                callback(self, model)
+            except Exception as e:
+                print(f"Callback execution for event {onevent} failed: {e}")
 
     def on_new_best_val_loss(self, model:nn.Module):
         if not self.skip_first_new_best_val_loss:
@@ -187,8 +188,8 @@ class Trainer:
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
 
-        logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        logging.info(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
         
         betas = (self.config.beta1, self.config.beta2)
         optimizer = torch.optim.AdamW(optim_groups, lr=self.config.learning_rate, betas=betas, fused=True)
@@ -221,19 +222,19 @@ class Trainer:
         model.train()
         return out
 
-    def train(self, model:TrainerModel, compile:bool=None):
+    def train(self, model, raw_model, compile:bool=None):
         
         # assert model.device == DEVICE, f"Only CUDA device is supported for training. Model is in :{model.device}"
-        assert self.config.seq_length == model.config.seq_length, f"Sequence length for model and trainer is not equal {self.config.seq_length}!={model.config.seq_length}"
+        assert self.config.seq_length == raw_model.config.seq_length, f"Sequence length for model and trainer is not equal {self.config.seq_length}!={raw_model.config.seq_length}"
 
         torch.manual_seed(self.config.seed)
         torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
         if (compile is None and self.config.compile) or compile:
-            logging.info("compiling the model...")
+            print("compiling the model...")
             model = torch.compile(model)
-            logging.info("compiling the model done!")
+            print("compiling the model done!")
         
         scaler = torch.amp.GradScaler(self.device, enabled=(self.config.dtype == 'float16'))
         optimizer = self._configure_optimizers(model)
@@ -252,7 +253,7 @@ class Trainer:
             mfu = 0
             t0 = 0
             
-            self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run)
+            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
@@ -262,7 +263,9 @@ class Trainer:
                 # forward the model
                 if t0 == 0:
                     t0 = time.time()
-                for _ in range(self.config.gradient_accumulation_steps):
+                for micro_batch in range(self.config.gradient_accumulation_steps):
+                    if micro_batch == self.config.gradient_accumulation_steps - 1:
+                        self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
                     with self.ctx:
                         _, loss = model(X, Y)
                         loss = loss / self.config.gradient_accumulation_steps
@@ -279,8 +282,8 @@ class Trainer:
                 scaler.update()
 
                 optimizer.zero_grad(set_to_none=True)
-
-                if it % self.config.log_interval == 0:
+                
+                if self.rank == 0 and it % self.config.log_interval == 0:
                     loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
                     
                     dt = time.time() - t0
@@ -300,17 +303,20 @@ class Trainer:
                             running_fwd_bwd_tokens_per_sec = 0.9*running_fwd_bwd_tokens_per_sec + 0.1*fwd_bwd_tokens_per_sec
                             running_iter_time = 0.9* running_iter_time + 0.1 * iter_time
                         
-                        mfu = estimate_mfu(model=model,fwdbwd_per_iter=self.config.batch_size * self.config.gradient_accumulation_steps, flops_promised=self.config.promised_flops,dt=iter_time)
+                        mfu = estimate_mfu(model=raw_model,fwdbwd_per_iter=self.config.batch_size * self.config.gradient_accumulation_steps, flops_promised=self.config.promised_flops,dt=iter_time)
                         
-                    logging.info(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
+                    print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
-                    if it > 0 and it % self.config.eval_interval == 0:
-                        self.do_eval(model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run)
+                    if it>0 and it % self.config.eval_interval == 0:
+                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run)
 
     def init_logger(self):
         return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config))
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run):
+        if self.rank != 0:
+            return
+        
         t0 = time.time()
         eval_out = self.evaluate(model)
                 
@@ -345,4 +351,4 @@ class Trainer:
         else:
             eta = 0.0
 
-        logging.info(f"Eval iter {it}: train loss {eval_out['train'].loss:.4f}, val loss {eval_out['val'].loss:.4f}, val perplexity {eval_out['val'].perplexity:.4f}, ETA {datetime.timedelta(seconds=eta)}")
+        print(f"Eval iter {it}: train loss {eval_out['train'].loss:.4f}, val loss {eval_out['val'].loss:.4f}, val perplexity {eval_out['val'].perplexity:.4f}, ETA {datetime.timedelta(seconds=eta)}")

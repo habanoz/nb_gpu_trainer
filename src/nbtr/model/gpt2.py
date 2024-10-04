@@ -3,9 +3,6 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
-import logging
-
-logger = logging.getLogger(__name__)
 
 @dataclass
 class GPTConfig:
@@ -59,7 +56,7 @@ class CausalSelfAttention(nn.Module):
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
-            logger.warning("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(torch.ones(config.seq_length, config.seq_length))
                                         .view(1, 1, config.seq_length, config.seq_length))
@@ -137,7 +134,7 @@ class GPT(nn.Module):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
 
         # report number of parameters
-        logger.info("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
+        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
     
     def forward(self, idx, targets=None):
         device = idx.device
