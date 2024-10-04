@@ -13,7 +13,7 @@ import os
 
 def main_with_repo_id(repo_id):
     # prepare model
-    hf_model = HfModel.from_pretrained(repo_id)
+    hf_model = HfModel.from_pretrained(repo_id, device="cpu")
 
     # train
     hf_trainer_config = HfTrainerConfig.from_pretrained(repo_id=repo_id)
@@ -34,7 +34,7 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
     # prepare model
     gpt_config = GPTConfig.from_yaml(model_config_file)
     hf_model_config = HfModelConfig(gpt_config=gpt_config)
-    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config)
+    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
 
     # train
     hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config)
@@ -45,6 +45,9 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
     if os.getenv("RANK",-1)==-1:
         trainer = Trainer(hf_trainer_config.trainer_config)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer)
+        
+        hf_model.to(device="cuda")
+        
         trainer.train(hf_model=hf_model)
     else:
         ## DDP training
@@ -57,6 +60,9 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
         trainer = Trainer(hf_trainer_config.trainer_config, rank=rank)
         trainer = DDPTrainer(trainer=trainer, rank=rank)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer, rank=rank)
+        
+        hf_model.to(rank)
+        
         try:
             trainer.train(hf_model=hf_model)
         except Exception as e:
