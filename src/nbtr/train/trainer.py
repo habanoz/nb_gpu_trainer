@@ -293,7 +293,7 @@ class Trainer:
                     t0 = 0
                                 
                     iters_since_last_log = self.config.log_interval if it > 0 else 1
-                    fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log
+                    fwd_bwd_tokens = self.config.batch_size * self.config.seq_length * self.config.gradient_accumulation_steps * iters_since_last_log * self.world_size
                     
                     fwd_bwd_tokens_per_sec = fwd_bwd_tokens / dt
                     iter_time = dt / iters_since_last_log
