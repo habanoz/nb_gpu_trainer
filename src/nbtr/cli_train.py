@@ -57,7 +57,10 @@ def hf_train(hf_trainer_config:HfTrainerConfig, hf_model):
         trainer = Trainer(hf_trainer_config.trainer_config, rank=rank)
         trainer = DDPTrainer(trainer=trainer, rank=rank)
         trainer = HFBackedTrainer(hf_trainer_config=hf_trainer_config, trainer=trainer, rank=rank)
-        trainer.train(hf_model=hf_model)
+        try:
+            trainer.train(hf_model=hf_model)
+        except Exception as e:
+            print(str(e))
         
         dist.destroy_process_group()
         
