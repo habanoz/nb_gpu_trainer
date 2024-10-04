@@ -259,11 +259,14 @@ class Trainer:
                 
                 # determine current lr rate and update params if needed
                 lr = self.update_lr(it, optimizer)
-
+                
+                print(f"{it} started")
+                
                 # forward the model
                 if t0 == 0:
                     t0 = time.time()
                 for micro_batch in range(self.config.gradient_accumulation_steps):
+                    print(f"{micro_batch} batch ended")
                     if micro_batch == self.config.gradient_accumulation_steps - 1:
                         self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
                     with self.ctx:
@@ -274,7 +277,7 @@ class Trainer:
                     X, Y = self.get_batch('train')
 
                     scaler.scale(loss).backward()
-
+                
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
                 
@@ -282,6 +285,9 @@ class Trainer:
                 scaler.update()
 
                 optimizer.zero_grad(set_to_none=True)
+                
+                print(f"{it} ended")
+                
                 
                 if self.rank == 0 and it % self.config.log_interval == 0:
                     loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
