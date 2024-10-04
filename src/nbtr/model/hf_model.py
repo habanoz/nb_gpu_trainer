@@ -45,9 +45,7 @@ class HfModel(TrainerModel):
     @staticmethod
     def from_pretrained(repo_id, device:str='cuda'):
         # update model state with the latest state from the repo
-        print(repo_id, FILE_NAME)
         model_file = cached_file(repo_id, FILE_NAME, _raise_exceptions_for_missing_entries=True)
-        print("torch load", repo_id, FILE_NAME)
         model_state = torch.load(model_file, torch.device(device))
 
         hf_cfg = HfModelConfig.from_pretrained(repo_id)
