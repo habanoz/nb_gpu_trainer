@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
-import torch.utils.checkpoint as gc
+from torch.utils.checkpoint import checkpoint as gc
 
 @dataclass
 class GPTConfig:
@@ -138,6 +138,10 @@ class GPT(nn.Module):
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
     
+    @property
+    def gradient_checkpointing(self):
+        return self._gradient_checkpointing
+
     @gradient_checkpointing.setter
     def gradient_checkpointing(self, value:bool):
         self._gradient_checkpointing = value
@@ -155,7 +159,7 @@ class GPT(nn.Module):
 
         for block in self.transformer.h:
             if self._gradient_checkpointing and self.training:
-                x = gc(block(x))
+                x = gc(block,x, use_reentrant=True)
             else:
                 x = block(x)
             
