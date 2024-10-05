@@ -6,6 +6,7 @@ Model code is copied from the haber-gpt repository. Training script is built up-
 
 - Trainer: Cuda targeted, Mixed-precision, flash-attention enabled model training. Expects dataset to be in a flat numpy array format.
 - HFBackedTrainer: A wrapper around the Trainer. It integrates with the huggingface hub to save and retrieve the model and optimizer state.
+- DDPTrainer: Enables local multi-GPU training.
 
 ## Configuration
 
@@ -84,13 +85,18 @@ trainer = HFBackedTrainer.from_config(trainer_cfg_file)
 trainer.train(model)
 ```
 
-## Example notebook to start training
+## Launching
 
-Checkout `notebooks` directory for examples. 
+### Train single-GPU
 
-It is recommended to clone this repository and edit the configuration per your needs then use it in the notebook to train. Here is a colab notebook to begin with.
+```bash
+python src/nbtr/cli_train.py --repo_id habanoz/test-repo --data_dir data/openwebtext --trainer_config_file config/news_trainer.yml --model_config_file config/news_model.yml0
+```
 
-https://colab.research.google.com/drive/14jIzTnKvharpRV9gzl9hRGJhn8pvfx83?usp=sharing
+### Train local multi-GPU
+```bash
+torchrun --standalone --nproc_per_node=2 src/nbtr/cli_train.py --repo_id habanoz/test-repo-2 --data_dir data/openwebtext --trainer_config_file config/news_trainer.yml --model_config_file config/news_model.yml
+```
 
 ## Acknowledgement
 
