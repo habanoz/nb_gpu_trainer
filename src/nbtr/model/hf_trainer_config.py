@@ -46,8 +46,6 @@ class HfTrainerConfig():
 
     def save(self):
         if not os.path.exists(self.trainer_config.out_dir):
-            print("RANK", os.getenv("RANK", -1))
-            print("!!!!!!creating dirs!!!!")
             os.makedirs(self.trainer_config.out_dir)
             
         with open(self._get_path(), "w") as f:

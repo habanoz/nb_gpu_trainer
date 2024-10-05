@@ -51,6 +51,8 @@ def hf_train_ddp(hf_trainer_config, hf_model_config:HfModelConfig, hf_model, sav
     rank = dist.get_rank()
     rank = rank % torch.cuda.device_count()
     
+    assert dist.get_world_size() <= torch.cuda.device_count() , "There are more processes than available cuda devices.!!!"
+    
     if rank == 0 and save_config:
         save_configs(hf_trainer_config, hf_model_config)
     
