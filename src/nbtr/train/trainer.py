@@ -27,6 +27,7 @@ class TrainerConfig:
     out_dir:str = None
     dtype: str = 'bfloat16'
     compile: bool=False
+    gc: bool=False # gradient checkpointing
         
     # learning rate
     learning_rate: float = 1e-4
@@ -241,6 +242,9 @@ class Trainer:
 
         # start training
         model.train()
+        
+        if self.config.gc:
+            model.gradient_checkpointing=True
         
         with self.init_logger() as wb_run:
         
