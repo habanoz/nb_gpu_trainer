@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
+import torch.utils.checkpoint as gc
 
 @dataclass
 class GPTConfig:
@@ -107,6 +108,7 @@ class GPT(nn.Module):
         super().__init__()
 
         self.config = config
+        self._gradient_checkpointing = False
 
         self.transformer = nn.ModuleDict(
             dict(
@@ -136,6 +138,10 @@ class GPT(nn.Module):
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
     
+    @gradient_checkpointing.setter
+    def gradient_checkpointing(self, value:bool):
+        self._gradient_checkpointing = value
+    
     def forward(self, idx, targets=None):
         device = idx.device
         B, T = idx.size()
@@ -148,7 +154,11 @@ class GPT(nn.Module):
         x = self.transformer.drop(tok_embd + pos_embd)
 
         for block in self.transformer.h:
-            x = block(x)
+            if self._gradient_checkpointing and self.training:
+                x = gc(block(x))
+            else:
+                x = block(x)
+            
         x = self.transformer.ln_f(x)
         
         logits = self.lm_head(x)

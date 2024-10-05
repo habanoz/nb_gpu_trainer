@@ -113,6 +113,25 @@ def save_configs(hf_trainer_config:HfTrainerConfig, hf_model_config:HfModelConfi
     hf_model_config.save_pretrained(out_dir, repo_id=hf_trainer_config.repo_id, push_to_hub=True)
 
     print("Configurations are saved.")
+
+def parse(val:str):
+    assert val is not None, "Value cannot be None"
+    
+    if val.lower in ("true", "false"):
+        return bool(val)
+    
+    try:
+        return float(val)
+    except:
+        pass
+    
+    try:
+        return int(val)
+    except:
+        pass
+    
+    return val
+
     
 if __name__ == '__main__':
     print("RANK", os.getenv("RANK", -1))
@@ -131,7 +150,7 @@ if __name__ == '__main__':
 
     keys = [extra[i][2:] for i in range(0, len(extra),2)]
     values = [extra[i] for i in range(1, len(extra),2)]
-    kv = {k: int(v) if v.isdigit() else  v for k,v in zip(keys, values)}
+    kv = {k: parse(v) for k,v in zip(keys, values)}
     
     hf_training_config = get_hf_training_config_from_repo(repo_id)
     hf_model_config = get_hf_model_config_from_repo(repo_id)
