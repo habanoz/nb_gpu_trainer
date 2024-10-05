@@ -4,7 +4,7 @@ A notebook first training training repository to use cloud notebook (with GPU) p
 
 Model code is copied from the haber-gpt repository. Training script is built up-on haber-gpt repository. 
 
-- Trainer: Cuda targeted, Mixed-precision, flash-attention enabled model training. Expects dataset to be in a flat numpy array format.
+- Trainer: Cuda targeted, Mixed-precision, flash-attention enabled model training. Expects dataset to be in a flat numpy array format. Gradient checkpointing is available.
 - HFBackedTrainer: A wrapper around the Trainer. It integrates with the huggingface hub to save and retrieve the model and optimizer state.
 - DDPTrainer: Enables local multi-GPU training.
 
