@@ -78,7 +78,7 @@ class Tokenizer:
 
         for split, dset in dataset.items():
             arr_len = sum(len(ids) for ids in dset["input_ids"])
-            print("Split {split}, token count: {arr_len}")
+            print(f"Split {split}, token count: {arr_len}")
             
             filename = os.path.join(data_dir, f'{split}.bin')
             arr = np.memmap(filename, dtype=np.uint16, mode='w+', shape=(arr_len,))
