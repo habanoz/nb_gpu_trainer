@@ -4,6 +4,7 @@ import numpy as np
 import os
 from transformers.utils import cached_file
 from huggingface_hub import HfApi
+from tqdm import tqdm
 
 TOK_FILE_NAME="tokenizer.model"
 VOC_FILE_NAME="tokenizer.vocab"
@@ -51,7 +52,7 @@ class Tokenizer:
         columns = dataset['train'].column_names
         assert value_key in columns, f"Column {value_key} not found in column list: [{columns}]"
 
-        return dataset.map(lambda example: self.encode(example[value_key]), batched=True, remove_columns=columns)
+        return dataset.map(lambda example: self.encode(example[value_key]), batched=True, remove_columns=columns, desc="tokenizing the splits", num_proc=2)
     
     def encode_ds_from_hub(self, dataset_repo_id, data_dir, value_key="text"):
         ds = load_dataset(dataset_repo_id)
@@ -73,8 +74,30 @@ class Tokenizer:
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
 
-        self._save_ids(dataset,data_dir,"train")
-        self._save_ids(dataset,data_dir,"val")
+        for split, dset in dataset.items():
+            arr_len = np.sum(dset['len'], dtype=np.uint64)
+            
+            
+            filename = os.path.join(data_dir, f'{split}.bin')
+            dtype = np.uint16
+            arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
+            
+            total_batches = 1024
+
+            idx = 0
+            for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
+                # Batch together samples for faster write
+                batch = dset.shard(num_shards=total_batches, index=batch_idx, contiguous=True).with_format('numpy')
+                arr_batch = np.concatenate(batch['input_ids'])
+                # Write into mmap
+                arr[idx : idx + len(arr_batch)] = arr_batch
+                idx += len(arr_batch)
+            arr.flush()
+            
+            print(f"Saved: Number of '{split}' tokens: {arr_len}")
+            
+        # self._save_ids(dataset,data_dir,"train")
+        # self._save_ids(dataset,data_dir,"val")
 
     def _save_ids(self, dataset, data_dir, name="train"):
         dataset = dataset[name]
