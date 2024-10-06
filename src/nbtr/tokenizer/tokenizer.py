@@ -62,8 +62,10 @@ class Tokenizer:
             ds = ds["train"].train_test_split(test_size=0.055, seed=2357, shuffle=True)
             ds['val'] = ds.pop('test') # rename the test split to val
             print("Validation split created.")
-            
-        self.encode_training_data(ds, data_dir, value_key)
+        try:
+            self.encode_training_data(ds, data_dir, value_key)
+        except Exception as e:
+            print(e)
 
     def encode_training_data(self, dataset, data_dir, value_key="text"):
         assert "train" in dataset, "Dataset does not contain split 'train'!"
