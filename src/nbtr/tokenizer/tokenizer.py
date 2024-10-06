@@ -82,7 +82,7 @@ class Tokenizer:
             dtype = np.uint16
             arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
             
-            total_batches = 1024
+            total_batches = 1024 if arr_len > 1024 else 1
 
             idx = 0
             for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
