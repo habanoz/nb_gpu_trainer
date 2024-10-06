@@ -81,8 +81,9 @@ class Tokenizer:
             dtype = np.uint16
             arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
             
-            total_batches = 1024 if arr_len > 1024 else 1
-            print(f"Saving: Number of '{split}' tokens: {arr_len} in {total_batches} batches.")
+            total_batches = 1024 if len(dset) > 1024 else 1
+            
+            print(f"Saving split '{split}', docs: {len(dset)}, tokens: {arr_len} in {total_batches} batches.")
             
             idx = 0
             for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
@@ -94,7 +95,7 @@ class Tokenizer:
                 idx += len(arr_batch)
             arr.flush()
             
-            print(f"Saved:'{split}' tokens.")
+            print(f"Saved '{split}' tokens.")
             
         # self._save_ids(dataset,data_dir,"train")
         # self._save_ids(dataset,data_dir,"val")
