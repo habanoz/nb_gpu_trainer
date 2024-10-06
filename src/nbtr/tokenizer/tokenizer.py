@@ -46,7 +46,7 @@ class Tokenizer:
         
     def encode(self, text:str):
         input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
-        return {"input_ids": input_ids, "len":len(input_ids)}
+        return {"input_ids": input_ids}
     
     def encode_all(self, dataset, value_key):
         columns = dataset['train'].column_names
@@ -75,8 +75,7 @@ class Tokenizer:
             os.makedirs(data_dir)
 
         for split, dset in dataset.items():
-            arr_len = np.sum(dset['len'], dtype=np.uint64)
-            
+            arr_len = sum(len(ids) for ids in dataset["input_ids"])
             
             filename = os.path.join(data_dir, f'{split}.bin')
             dtype = np.uint16
