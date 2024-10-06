@@ -52,7 +52,7 @@ class Tokenizer:
         columns = dataset['train'].column_names
         assert value_key in columns, f"Column {value_key} not found in column list: [{columns}]"
 
-        return dataset.map(lambda example: self.encode(example[value_key]), batched=True, remove_columns=columns, desc="tokenizing the splits", num_proc=2)
+        return dataset.map(lambda example: self.encode(example[value_key]), batched=True, remove_columns=columns, desc="tokenizing the splits", num_proc=1)
     
     def encode_ds_from_hub(self, dataset_repo_id, data_dir, value_key="text"):
         ds = load_dataset(dataset_repo_id)
