@@ -55,6 +55,13 @@ class Tokenizer:
     
     def encode_ds_from_hub(self, dataset_repo_id, data_dir, value_key="text"):
         ds = load_dataset(dataset_repo_id)
+        
+        if "val" not in ds:
+            print("No validation split is found. Creating a validation split.")
+            ds = ds["train"].train_test_split(test_size=0.055, seed=2357, shuffle=True)
+            ds['val'] = ds.pop('test') # rename the test split to val
+            print("Validation split created.")
+            
         self.encode_training_data(ds, data_dir, value_key)
 
     def encode_training_data(self, dataset, data_dir, value_key="text"):
