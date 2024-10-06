@@ -75,7 +75,7 @@ class Tokenizer:
             os.makedirs(data_dir)
 
         for split, dset in dataset.items():
-            arr_len = sum(len(ids) for ids in dataset["input_ids"])
+            arr_len = sum(len(ids) for ids in dset["input_ids"])
             
             filename = os.path.join(data_dir, f'{split}.bin')
             dtype = np.uint16
