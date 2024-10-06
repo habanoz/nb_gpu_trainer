@@ -78,13 +78,13 @@ class Tokenizer:
 
         for split, dset in dataset.items():
             arr_len = sum(len(ids) for ids in dset["input_ids"])
+            print("Split {split}, token count: {arr_len}")
             
             filename = os.path.join(data_dir, f'{split}.bin')
-            dtype = np.uint16
-            arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
+            arr = np.memmap(filename, dtype=np.uint16, mode='w+', shape=(arr_len,))
+            print("memmap is ready!")
             
-            total_batches = 1024 if len(dset) > 1024 else 1
-            
+            total_batches = 1024*1024 if len(dset) > 1024 else 1
             print(f"Saving split '{split}', docs: {len(dset)}, tokens: {arr_len} in {total_batches} batches.")
             
             idx = 0
