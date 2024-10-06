@@ -46,7 +46,7 @@ class Tokenizer:
         
     def encode(self, text:str):
         input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
-        return {"input_ids": input_ids}
+        return {"input_ids": input_ids, "len":len(input_ids)}
     
     def encode_all(self, dataset, value_key):
         columns = dataset['train'].column_names
