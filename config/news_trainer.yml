@@ -20,8 +20,8 @@ beta2: 0.99
 
 # logging
 log_interval: 10
-eval_interval: 100 # must be multiple of log interval
-eval_iters: 1
+eval_interval: 20 # must be multiple of log interval
+eval_iters: 5
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: False
