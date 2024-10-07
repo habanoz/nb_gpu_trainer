@@ -247,9 +247,12 @@ class Trainer:
             model.gradient_checkpointing=True
         
         with self.init_logger() as wb_run:
-        
+            try:
+                
             # fetch the very first batch
-            X, Y = self.get_batch('train')
+                X, Y = self.get_batch('train')
+            except Exception as e:
+                print("Error:"+str(e))
             
             start_iter = self.state.iter_num
             running_fwd_bwd_tokens_per_sec = 0
