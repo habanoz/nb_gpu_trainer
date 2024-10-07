@@ -271,7 +271,7 @@ class Trainer:
                 if t0 == 0:
                     t0 = time.time()
                 for micro_batch in range(self.config.gradient_accumulation_steps):
-                    if micro_batch == self.config.gradient_accumulation_steps - 1:
+                    if self.world_size>1 and micro_batch == self.config.gradient_accumulation_steps - 1:
                         self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
                     try:
                         with self.ctx:
