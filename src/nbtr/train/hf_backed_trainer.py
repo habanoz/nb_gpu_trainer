@@ -44,7 +44,10 @@ class HFBackedTrainer:
         assert isinstance(hf_model, HfModel)
         model = hf_model.model
         
-        self.trainer.train(model=model, raw_model=model)
+        try:
+            self.trainer.train(model=model, raw_model=model)
+        except Exception as e:
+            print("Error: "+str(e))
 
         # wait until jobs are complete
         self.executor.shutdown()
