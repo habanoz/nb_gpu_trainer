@@ -48,10 +48,6 @@ class Tokenizer:
         input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
         return {"input_ids": input_ids}
     
-    def encode_raw(self, text:str, bos=True, eos=True):
-        input_ids = self.sp.Encode(text,add_bos=bos, add_eos=eos)
-        return input_ids
-    
     def encode_all(self, dataset, value_key):
         columns = dataset['train'].column_names
         assert value_key in columns, f"Column {value_key} not found in column list: [{columns}]"
@@ -98,7 +94,7 @@ class Tokenizer:
                 arr_batch = np.concatenate(batch['input_ids'])
                 # Write into mmap
                 arr[idx : idx + len(arr_batch)] = arr_batch
-                ihuggdx += len(arr_batch)
+                idx += len(arr_batch)
             arr.flush()
             
             print(f"Saved '{split}' tokens.")

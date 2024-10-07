@@ -1,7 +1,7 @@
 
 seq_length: 1024
 gradient_accumulation_steps: 2
-batch_size: 16
+batch_size: 24
 max_iters : 100
 lr_decay_iters : 100
 warmup_iters: 1
