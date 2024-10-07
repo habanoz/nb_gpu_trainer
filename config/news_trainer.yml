@@ -2,8 +2,8 @@
 seq_length: 1024
 gradient_accumulation_steps: 2
 batch_size: 16
-max_iters : 18500
-lr_decay_iters : 18500
+max_iters : 19200
+lr_decay_iters : 19200
 warmup_iters: 100
 dtype: float16
 compile: False
