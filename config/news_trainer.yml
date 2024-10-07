@@ -1,9 +1,10 @@
 
 seq_length: 1024
-gradient_accumulation_steps: 1
-batch_size: 8
-max_iters : 60
-warmup_iters: 1
+gradient_accumulation_steps: 2
+batch_size: 16
+max_iters : 18500
+lr_decay_iters : 18500
+warmup_iters: 100
 dtype: float16
 compile: False
     
@@ -18,12 +19,15 @@ beta1:  0.9
 beta2: 0.99
 
 # logging
-log_interval: 10
-eval_interval: 30 # must be multiple of log interval
+log_interval: 400
+eval_interval: 1200 # must be multiple of log interval
 eval_iters: 1
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: False
-wandb_project: NB-Haber-GPT-Training
-wandb_run_name: haber-gpt-v1.xx
-wandb_run_id: "1721342981"
+wandb_project: NB-Haber-GPT-2-Training
+wandb_run_name: haber-gpt-v2-initial
+wandb_run_id: "1728306339"
+
+# SxBxW -> 1024×32×2 = 65536
+# 19200×65536 = 1,258,291,200

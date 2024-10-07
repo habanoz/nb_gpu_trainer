@@ -48,6 +48,10 @@ class Tokenizer:
         input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
         return {"input_ids": input_ids}
     
+    def encode_raw(self, text:str, bos=True, eos=True):
+        input_ids = self.sp.Encode(text,add_bos=bos, add_eos=eos)
+        return input_ids
+    
     def encode_all(self, dataset, value_key):
         columns = dataset['train'].column_names
         assert value_key in columns, f"Column {value_key} not found in column list: [{columns}]"
@@ -65,7 +69,7 @@ class Tokenizer:
         try:
             self.encode_training_data(ds, data_dir, value_key)
         except Exception as e:
-            print(e)
+            print("Error:"+str(e))
 
     def encode_training_data(self, dataset, data_dir, value_key="text"):
         assert "train" in dataset, "Dataset does not contain split 'train'!"
@@ -84,7 +88,7 @@ class Tokenizer:
             arr = np.memmap(filename, dtype=np.uint16, mode='w+', shape=(arr_len,))
             print("memmap is ready!")
             
-            total_batches = 1024*1024 if len(dset) > 1024 else 1
+            total_batches = 1024*1024 if len(dset) > 1024*1024 else (1024 if len(dset) > 1024 else 1)
             print(f"Saving split '{split}', docs: {len(dset)}, tokens: {arr_len} in {total_batches} batches.")
             
             idx = 0
@@ -94,7 +98,7 @@ class Tokenizer:
                 arr_batch = np.concatenate(batch['input_ids'])
                 # Write into mmap
                 arr[idx : idx + len(arr_batch)] = arr_batch
-                idx += len(arr_batch)
+                ihuggdx += len(arr_batch)
             arr.flush()
             
             print(f"Saved '{split}' tokens.")
