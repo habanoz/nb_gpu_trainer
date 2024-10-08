@@ -39,3 +39,7 @@ wandb_run_id: "1728306340"
 
 # ratio
 # 60M*N / 262M * 3N = 0.076335878 ~ 8%
+
+# training data
+# news-tr-1.8M-tokenizer-8k
+# 1UsURw9L0t-BWlvM2IigNIeGObQn89FMI
