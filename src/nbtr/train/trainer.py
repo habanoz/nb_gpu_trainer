@@ -105,6 +105,7 @@ class Trainer:
     def set_state(self, state: TrainingState):
         assert state is not None, "state cannot be None"
         self.state =  state
+        print(f"Restoring trainer state best_val_loss={state.best_val_loss}, iter_num={state.iter_num}")
         
     def add_callback(self, onevent: TrainerEvent, callback):
         self.callbacks[onevent].append(callback)
