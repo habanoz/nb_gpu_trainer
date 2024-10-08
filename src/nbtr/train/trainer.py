@@ -260,7 +260,14 @@ class Trainer:
             mfu = 0
             t0 = 0
             
-            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run)
+            # if resuming a training, replay torch.randints to avoid sampling the same examples.
+            if self.state.iter_num:
+                random_seed_replay_count = self.state.iter_num *self.config.gradient_accumulation_steps + (self.state.iter_num//self.config.eval_interval)*self.config.eval_iters
+                for i in range(random_seed_replay_count):
+                    # I am not sure whether range matters
+                    torch.randint(1e6, (self.config.batch_size,))
+
+            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
@@ -319,7 +326,7 @@ class Trainer:
                         print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
                         if it>0 and it % self.config.eval_interval == 0:
-                            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run)
+                            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run, mfu)
                             
                 except Exception as e:
                     print("Error:"+str(e))
@@ -327,7 +334,7 @@ class Trainer:
     def init_logger(self):
         return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config))
 
-    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run):
+    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run, mfu):
         if self.rank != 0:
             return
         
@@ -337,10 +344,11 @@ class Trainer:
         wb_run.log({
                     "iter": it,
                     "train/loss": eval_out['train'].loss,
-                    "val/loss": eval_out['val'].perplexity,
+                    "val/loss": eval_out['val'].loss,
                     "val/perplexity": eval_out['val'].perplexity,
                     "lr": lr,
                     "tokens/sec": running_fwd_bwd_tokens_per_sec,
+                    "mfu": mfu,
                 })
             
         
