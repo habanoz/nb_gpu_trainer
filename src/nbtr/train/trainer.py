@@ -267,7 +267,7 @@ class Trainer:
                     random_seed_replay_count = self.state.iter_num *self.config.gradient_accumulation_steps + (self.state.iter_num//self.config.eval_interval)*self.config.eval_iters
                     for i in range(random_seed_replay_count):
                         # I am not sure whether range matters
-                        torch.randint(1e6, (self.config.batch_size,))
+                        torch.randint(1024, (self.config.batch_size,))
             except Exception as e:
                 print("Replay Error:"+str(e))
                 
