@@ -26,8 +26,8 @@ promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
 wandb_project: Haber-GPT-2-Small
-wandb_run_name: haber-gpt-2-small-v1.0
-wandb_run_id: "1728306340"
+wandb_run_name: haber-gpt-2-small-v2.0-30M
+wandb_run_id: "1728306344"
 
 # eval budget
 # 512 (seq len) * 128 (eval batch size) * 100 (eval iterations) * 9 (8+1 evals) = 58,982,400 ~ 60M tokens
