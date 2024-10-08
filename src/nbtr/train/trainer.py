@@ -261,13 +261,16 @@ class Trainer:
             mfu = 0
             t0 = 0
             
-            # if resuming a training, replay torch.randints to avoid sampling the same examples.
-            if self.state.iter_num:
-                random_seed_replay_count = self.state.iter_num *self.config.gradient_accumulation_steps + (self.state.iter_num//self.config.eval_interval)*self.config.eval_iters
-                for i in range(random_seed_replay_count):
-                    # I am not sure whether range matters
-                    torch.randint(1e6, (self.config.batch_size,))
-
+            try:
+                # if resuming a training, replay torch.randints to avoid sampling the same examples.
+                if self.state.iter_num > 0:
+                    random_seed_replay_count = self.state.iter_num *self.config.gradient_accumulation_steps + (self.state.iter_num//self.config.eval_interval)*self.config.eval_iters
+                    for i in range(random_seed_replay_count):
+                        # I am not sure whether range matters
+                        torch.randint(1e6, (self.config.batch_size,))
+            except Exception as e:
+                print("Replay Error:"+str(e))
+                
             self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
