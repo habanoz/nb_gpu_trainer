@@ -1,15 +1,15 @@
 
-seq_length: 1024
-gradient_accumulation_steps: 2
-batch_size: 24
-max_iters : 100
-lr_decay_iters : 100
-warmup_iters: 1
+seq_length: 512
+gradient_accumulation_steps: 1
+batch_size: 128
+max_iters : 4000
+lr_decay_iters : 4000
+warmup_iters: 100
 dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.001
+learning_rate:  0.003
 decay_lr: True
 min_lr: 0.0001
 
@@ -19,15 +19,23 @@ beta1:  0.9
 beta2: 0.99
 
 # logging
-log_interval: 10
-eval_interval: 20 # must be multiple of log interval
-eval_iters: 5
+log_interval: 100
+eval_interval: 500 # must be multiple of log interval
+eval_iters: 100
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
-wandb_log: False
-wandb_project: NB-Haber-GPT-2-Training
-wandb_run_name: haber-gpt-v2-initial
-wandb_run_id: "1728306339"
+wandb_log: True
+wandb_project: Haber-GPT-2-Small
+wandb_run_name: haber-gpt-2-small-v1.0
+wandb_run_id: "1728306340"
 
-# SxBxW -> 1024×32×2 = 65536
-# 19200×65536 = 1,258,291,200
+# eval budget
+# 512 (seq len) * 128 (eval batch size) * 100 (eval iterations) * 9 (8+1 evals) = 58,982,400 ~ 60M tokens
+# flops = 60M * N
+
+# training budget
+# 512 (seq len) * 128 (batch size) * 1 (grad accumulations) * 4000 (training iterations) = 262,144,000 ~ 262M tokens
+# flops = 262M * 3N
+
+# ratio
+# 60M*N / 262M * 3N = 0.076335878 ~ 8%
