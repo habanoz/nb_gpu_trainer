@@ -271,7 +271,7 @@ class Trainer:
             except Exception as e:
                 print("Replay Error:"+str(e))
                 
-            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, 0, self.config.learning_rate, wb_run, 0.0)
+            self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, wb_run, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
