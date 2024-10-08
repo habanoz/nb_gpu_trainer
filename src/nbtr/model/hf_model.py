@@ -18,7 +18,7 @@ class HfModel(TrainerModel):
         
         super().__init__(_model)
         
-    def forward(self, x, y):
+    def forward(self, x, y=None):
         logits, loss =  self.model(x,y)
         return {'logits':logits, 'loss':loss}
     
