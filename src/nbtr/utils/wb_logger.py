@@ -23,6 +23,10 @@ class WandBLogger:
     def __exit__(self, exc_type, exc_value, tb):
         if self.run:
             self.run.finish()
+            
+        if exc_type:
+            raise
+        
         return True
     
     def log(self, message):
