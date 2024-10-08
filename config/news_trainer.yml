@@ -4,7 +4,7 @@ gradient_accumulation_steps: 16
 batch_size: 96
 max_iters : 700
 lr_decay_iters : 700
-warmup_iters: 100
+warmup_iters: 10
 dtype: float16
 compile: False
     
