@@ -46,7 +46,7 @@ class Tokenizer:
         
     def encode(self, text:str):
         input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
-        return {"input_ids": input_ids}
+        return {"input_ids": input_ids, 'len': [len(tokens) for tokens in input_ids] if isinstance(input_ids[0], list) else len(input_ids)}
     
     def encode_all(self, dataset, value_key):
         columns = dataset['train'].column_names
@@ -56,6 +56,11 @@ class Tokenizer:
     
     def encode_ds_from_hub(self, dataset_repo_id, data_dir, value_key="text"):
         ds = load_dataset(dataset_repo_id)
+        
+        if 'validation' in ds:
+            print("Renaming column 'validation' to 'val'!")
+            ds['val']=ds['validation']
+            del ds['validation']
         
         if "val" not in ds:
             print("No validation split is found. Creating a validation split.")
@@ -77,12 +82,12 @@ class Tokenizer:
             os.makedirs(data_dir)
 
         for split, dset in dataset.items():
-            arr_len = sum(len(ids) for ids in dset["input_ids"])
+            arr_len = sum(dset['len'])
+
             print(f"Split {split}, token count: {arr_len}")
             
             filename = os.path.join(data_dir, f'{split}.bin')
             arr = np.memmap(filename, dtype=np.uint16, mode='w+', shape=(arr_len,))
-            print("memmap is ready!")
             
             total_batches = 1024*1024 if len(dset) > 1024*1024 else (1024 if len(dset) > 1024 else 1)
             print(f"Saving split '{split}', docs: {len(dset)}, tokens: {arr_len} in {total_batches} batches.")
