@@ -1,10 +1,10 @@
 
 seq_length: 512
-gradient_accumulation_steps: 16
+gradient_accumulation_steps: 1
 batch_size: 96
-max_iters : 700
-lr_decay_iters : 700
-warmup_iters: 10
+max_iters : 11200
+lr_decay_iters : 11200
+warmup_iters: 20
 dtype: float16
 compile: False
     
@@ -19,27 +19,27 @@ beta1:  0.9
 beta2: 0.95
 
 # logging
-log_interval: 50
-eval_interval: 100 # must be multiple of log interval
-eval_iters: 115
+log_interval: 100
+eval_interval: 800 # must be multiple of log interval
+eval_iters: 85
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
 wandb_project: Haber-GPT-2-Small
-wandb_run_name: haber-gpt-2-small-v2.2-30M
-wandb_run_id: "1728306350"
+wandb_run_name: tinystories-v1.0-30M
+wandb_run_id: "1728306370"
 
 # eval budget
-# 512 (seq len) * 96 (eval batch size) * 317 (eval iterations) * 8 (7+1 evals) = 124,649,472 ~ 124M tokens
+# 512 (seq len) * 96 (eval batch size) * 85 (eval iterations) * 15 (14+1 evals) = 62668800 ~ 62M tokens
 # flops = 124M * N
 
 # training budget
-# 512 (seq len) * 96 (batch size) * 16 (grad accumulations) * 700 (training iterations) = 550,502,400 ~ 550M tokens
+# 512 (seq len) * 96 (batch size) * 1 (grad accumulations) * 11200 (training iterations) = 550,502,400 ~ 550M tokens
 # flops = 550M * 3N
 
 # ratio
-# 124M*N / 550M * 3N = 0.075151515 ~ 7.5%
+# 62M*N / 550M * 3N = 0.037575758 ~ 3.7%
 
 # training data
 # news-tr-1.8M-tokenizer-8k
-# 1UsURw9L0t-BWlvM2IigNIeGObQn89FMI
+# 1W6Y-iKIBXB8eYX1IsP8yuxwZ4WSjCe3x
