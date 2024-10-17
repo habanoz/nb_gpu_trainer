@@ -2,16 +2,15 @@
 seq_length: 512
 gradient_accumulation_steps: 5
 batch_size: 96
-max_iters : 15200 # planned for double-GPU
-warmup_iters: 10
+max_iters : 20000 # planned for double-GPU
+warmup_iters: 50
 dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.0005
-min_lr: 0.0005
-lr_decay_iters: 5000
-decay_lr: False
+learning_rate:  0.0006
+min_lr: 0.00006
+decay_lr: True
 
 # optimizer
 weight_decay: 0.1
@@ -21,23 +20,8 @@ beta2: 0.95
 # logging
 log_interval: 100
 eval_interval: 800 # must be multiple of log interval
-eval_iters: 85
+eval_iters: 90
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
 wandb_project: Haber-GPT-2-Small
-
-# eval budget
-# 512 (seq len) * 96 (eval batch size) * 85 (eval iterations) * 15 (14+1 evals) = 62668800 ~ 62M tokens
-# flops = 124M * N
-
-# training budget
-# 512 (seq len) * 96 (batch size) * 1 (grad accumulations) * 11200 (training iterations) = 550,502,400 ~ 550M tokens
-# flops = 550M * 3N
-
-# ratio
-# 62M*N / 550M * 3N = 0.037575758 ~ 3.7%
-
-# training data
-# news-tr-1.8M-tokenizer-8k
-# 1W6Y-iKIBXB8eYX1IsP8yuxwZ4WSjCe3x
