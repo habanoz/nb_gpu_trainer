@@ -2,8 +2,7 @@
 seq_length: 512
 gradient_accumulation_steps: 1
 batch_size: 96
-max_iters : 11200
-lr_decay_iters : 11200
+max_iters : 15200 # planned for double-GPU
 warmup_iters: 20
 dtype: float16
 compile: False
@@ -11,7 +10,6 @@ compile: False
 # learning rate
 learning_rate:  0.0005
 decay_lr: False
-min_lr: 0.0001
 
 # optimizer
 weight_decay: 0.1
@@ -26,8 +24,8 @@ promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
 wandb_project: Haber-GPT-2-Small
-wandb_run_name: tinystories-v1.0-30M
-wandb_run_id: "1728306370"
+wandb_run_name: haber-gpt-2-small-v2.4-30M
+wandb_run_id: "1729150277"
 
 # eval budget
 # 512 (seq len) * 96 (eval batch size) * 85 (eval iterations) * 15 (14+1 evals) = 62668800 ~ 62M tokens
