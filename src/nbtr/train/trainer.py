@@ -47,8 +47,8 @@ class TrainerConfig:
     promised_flops:float=65e12 # Tesla T4 on fp16
     ## wandb logging
     wandb_log: bool = False
-    wandb_project: str = "GPT Training"
-    wandb_run_name: str = "run1"
+    wandb_project: str = None
+    wandb_run_name: str = None
     wandb_run_id: str = None
     
     def __post_init__(self):

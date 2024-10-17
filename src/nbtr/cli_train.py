@@ -10,6 +10,7 @@ import torch
 from dataclasses import replace, asdict
 import argparse
 import os
+from time import time
 
 def main_with_repo_id(repo_id, hf_training_config, hf_model_config):
     hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
@@ -22,11 +23,20 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
     if data_dir is not None:
         trainer_config = replace(trainer_config, data_dir=data_dir)
     
+    if trainer_config.wandb_run_name is None:
+        trainer_config = replace(trainer_config, wandb_run_name=repo_id.split("/")[-1])
+    
+    if trainer_config.wandb_run_id is None:
+        trainer_config = replace(trainer_config, wandb_run_id=str(int(time())))
+    
     if len(extras)>0:
         trainer_config = replace(trainer_config, **extras)
 
     assert trainer_config.data_dir is not None
-
+    assert trainer_config.wandb_run_name is not None
+    assert trainer_config.wandb_run_id is not None
+    assert trainer_config.wandb_project is not None
+    
     gpt_config = GPTConfig.from_yaml(model_config_file)
     hf_model_config = HfModelConfig(gpt_config=gpt_config)
     hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
