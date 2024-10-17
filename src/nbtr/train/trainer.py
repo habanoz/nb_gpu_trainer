@@ -207,7 +207,7 @@ class Trainer:
             # wandb.require("core")
             wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, resume="allow", config=asdict(self.config))
     
-    @torch.no_grad()
+    @torch.inference_mode()
     def evaluate(self, model:nn.Module)->Dict[str,EvalResult]:
         out = {}
         model.eval()
