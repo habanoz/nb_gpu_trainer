@@ -247,7 +247,7 @@ class Trainer:
         if self.config.gc:
             model.gradient_checkpointing=True
         
-        with self.init_logger() as wb_run:
+        with self.init_logger(raw_model) as wb_run:
             X, Y = self.get_batch('train')
             
             start_iter = self.state.iter_num
@@ -320,8 +320,8 @@ class Trainer:
                     if it>0 and it % self.config.eval_interval == 0:
                         self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run, mfu)
 
-    def init_logger(self):
-        return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config))
+    def init_logger(self, model):
+        return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config)|asdict(model.config))
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run, mfu):
         if self.rank != 0:
