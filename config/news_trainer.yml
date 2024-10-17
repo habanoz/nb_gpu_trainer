@@ -8,7 +8,7 @@ dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.005
+learning_rate:  0.003
 min_lr: 0.0005
 lr_decay_iters: 5000
 decay_lr: True
@@ -26,8 +26,6 @@ promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
 wandb_project: Haber-GPT-2-Small
-wandb_run_name: haber-gpt-2-small-v2.5-30M
-wandb_run_id: "1729150278"
 
 # eval budget
 # 512 (seq len) * 96 (eval batch size) * 85 (eval iterations) * 15 (14+1 evals) = 62668800 ~ 62M tokens
