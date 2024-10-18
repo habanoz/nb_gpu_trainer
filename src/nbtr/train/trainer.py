@@ -250,7 +250,7 @@ class Trainer:
         with self.init_logger(raw_model) as wb_run:
             X, Y = self.get_batch('train')
             
-            start_iter = self.state.iter_num
+            start_iter = 0 if self.state.iter_num == 0 else self.state.iter_num+1
             running_fwd_bwd_tokens_per_sec = 0
             running_iter_time = 0
             mfu = 0
