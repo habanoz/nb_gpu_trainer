@@ -1,7 +1,7 @@
 
 seq_length: 512
 gradient_accumulation_steps: 5
-batch_size: 88
+batch_size: 80
 max_iters : 20000 # planned for double-GPU
 warmup_iters: 50
 dtype: float16
