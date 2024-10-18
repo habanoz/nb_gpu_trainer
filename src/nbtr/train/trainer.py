@@ -262,7 +262,7 @@ class Trainer:
                 for i in range(random_seed_replay_count):
                     # I am not sure whether range matters
                     torch.randint(1024, (self.config.batch_size,))
-            else:
+            elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
                 self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, wb_run, 0.0)
             
