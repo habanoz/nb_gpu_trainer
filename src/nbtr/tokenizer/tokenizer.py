@@ -38,14 +38,14 @@ class Tokenizer:
     
     @property
     def eos_id(self):
-        self.sp.eos_id
+        return self.sp.eos_id()
     
     @property
     def bos_id(self):
-        self.sp.bos_id
+        return self.sp.bos_id()
         
-    def encode(self, text:str):
-        input_ids = self.sp.Encode(text,add_bos=True, add_eos=True)
+    def encode(self, text:str, bos=True, eos=True):
+        input_ids = self.sp.Encode(text,add_bos=bos, add_eos=eos)
         return {"input_ids": input_ids, 'len': [len(tokens) for tokens in input_ids] if isinstance(input_ids[0], list) else len(input_ids)}
     
     def encode_all(self, dataset, value_key):
