@@ -1,16 +1,16 @@
 
 seq_length: 512
-gradient_accumulation_steps: 10
-batch_size: 48
+gradient_accumulation_steps: 5
+batch_size: 96
 max_iters : 20000 # planned for double-GPU
-warmup_iters: 50
+warmup_iters: 100
 dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.0006
+learning_rate:  0.00001
 min_lr: 0.00006
-decay_lr: True
+decay_lr: False
 
 # optimizer
 weight_decay: 0.1
