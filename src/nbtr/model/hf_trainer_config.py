@@ -8,10 +8,11 @@ import json
 FILE_NAME = "trainer.json"
 
 class HfTrainerConfig():
-    def __init__(self, repo_id: str, trainer_config: TrainerConfig):
+    def __init__(self, repo_id: str, trainer_config: TrainerConfig, init_repo_id=None):
         assert "/" in repo_id, f"Repo ID '{repo_id}' is must be in the form `user/repo_name`"
         
         self.repo_id = repo_id
+        self.init_repo_id = init_repo_id
         self._trainer_config = trainer_config
 
         if self._trainer_config.out_dir is None:

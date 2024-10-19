@@ -17,7 +17,7 @@ def main_with_repo_id(repo_id, hf_training_config, hf_model_config):
     
     hf_train(hf_training_config, hf_model.config, hf_model, False)
 
-def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, extras:dict):
+def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, extras:dict, init_repo_id=None):
     trainer_config = TrainerConfig.from_yaml(trainer_config_file)
     
     if data_dir is not None:
@@ -39,9 +39,9 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
     
     gpt_config = GPTConfig.from_yaml(model_config_file)
     hf_model_config = HfModelConfig(gpt_config=gpt_config)
-    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
+    hf_model = HfModel.from_pretrained_or_config(repo_id=init_repo_id if init_repo_id else repo_id, hf_model_config=hf_model_config, device="cpu")
 
-    hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config)
+    hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config, init_repo_id=init_repo_id)
     
     hf_train(hf_trainer_config, hf_model_config, hf_model, True)
 
@@ -150,12 +150,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo_id", type=str, required=True, help="Model repository id")
+    parser.add_argument("--init_repo_id", type=str, required=True, help="Initial model repository id")
     parser.add_argument("--data_dir", type=str, required=False, help="Data directory override.")
     parser.add_argument("--trainer_config_file", "-C", type=str, required=False, default=None, help="Trainer config file")
     parser.add_argument("--model_config_file", "-M", type=str, required=False, default=None, help="Model config file")
     args, extra = parser.parse_known_args()
     
     repo_id = args.repo_id
+    init_repo_id = args.init_repo_id
     data_dir = args.data_dir
     trainer_config_file = args.trainer_config_file
     model_config_file = args.model_config_file
@@ -175,4 +177,4 @@ if __name__ == '__main__':
         assert hf_model_config is not None, "Model config not found in the repo. Create a new repo!!! "
         main_with_repo_id(repo_id, hf_training_config, hf_model_config)
     else:
-        main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)
+        main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv, init_repo_id)
