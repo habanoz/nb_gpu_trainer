@@ -258,6 +258,7 @@ class Trainer:
             
             # if resuming a training, replay torch.randints to avoid sampling the same examples.
             if self.state.iter_num > 0:
+                self.skip_first_new_best_val_loss = False
                 random_seed_replay_count = self.state.iter_num *self.config.gradient_accumulation_steps + (self.state.iter_num//self.config.eval_interval)*self.config.eval_iters
                 for i in range(random_seed_replay_count):
                     # I am not sure whether range matters
