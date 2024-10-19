@@ -32,7 +32,7 @@ class Tokenizer:
         hfApi.upload_file(path_or_fileobj=tokenizer_vocab_file, path_in_repo=VOC_FILE_NAME, repo_id=to_repo_id )
     
     def decode(self, ids):
-        if 'input_ids' in ids:
+        if isinstance(ids, dict) and 'input_ids' in ids:
             ids = ids['input_ids']
         return self.sp.Decode(ids)
     
