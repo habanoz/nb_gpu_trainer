@@ -150,7 +150,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo_id", type=str, required=True, help="Model repository id")
-    parser.add_argument("--init_repo_id", type=str, required=True, help="Initial model repository id")
+    parser.add_argument("--init_repo_id", type=str, required=False, help="Initial model repository id")
     parser.add_argument("--data_dir", type=str, required=False, help="Data directory override.")
     parser.add_argument("--trainer_config_file", "-C", type=str, required=False, default=None, help="Trainer config file")
     parser.add_argument("--model_config_file", "-M", type=str, required=False, default=None, help="Model config file")
