@@ -8,7 +8,7 @@ dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.00001
+learning_rate:  0.00005
 min_lr: 0.00006
 decay_lr: False
 
