@@ -2,15 +2,15 @@
 seq_length: 512
 gradient_accumulation_steps: 1
 batch_size: 96
-max_iters : 10000 # planned for double-GPU
-warmup_iters: 100
+max_iters : 600000
+warmup_iters: 2000
 dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.00006
+learning_rate:  0.0006
 min_lr: 0.00006
-decay_lr: False
+decay_lr: True
 
 # optimizer
 weight_decay: 0.1
@@ -19,9 +19,9 @@ beta2: 0.95
 
 # logging
 log_interval: 100
-eval_interval: 800 # must be multiple of log interval
-eval_iters: 90
+eval_interval: 1000 # must be multiple of log interval
+eval_iters: 100
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
-wandb_project: Haber-GPT-2-Small
+wandb_project: Haber-GPT-2.1-Small
