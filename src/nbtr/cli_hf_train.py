@@ -143,16 +143,17 @@ def parse(val:str):
     
     if val.lower in ("true", "false"):
         return bool(val)
-    
-    try:
-        return float(val)
-    except:
-        pass
-    
+
     try:
         return int(val)
     except:
         pass
+
+    try:
+        return float(val)
+    except:
+        pass
+
     
     return val
 

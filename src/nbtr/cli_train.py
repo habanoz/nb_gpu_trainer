@@ -10,23 +10,26 @@ import argparse
 import os
 from time import time
 
-def main_with_config(data_dir, trainer_config_file, model_config_file, extras:dict):
+def main_with_config(data_dir, out_dir, trainer_config_file, model_config_file, extras:dict):
     trainer_config = TrainerConfig.from_yaml(trainer_config_file)
     
     if data_dir is not None:
         trainer_config = replace(trainer_config, data_dir=data_dir)
     
+    if out_dir is not None:
+        trainer_config = replace(trainer_config, out_dir=out_dir)
+    
     if trainer_config.wandb_run_id is None:
         trainer_config = replace(trainer_config, wandb_run_id=str(int(time())))
     
+    if trainer_config.wandb_run_name is None:
+        trainer_config = replace(trainer_config, wandb_run_name=trainer_config.out_dir)
+
     model_extras = {k[6:]:v for k,v in extras.items() if k.startswith("model.")}
     trainer_extras = {k:v for k,v in extras.items() if not k.startswith("model.")}
     
     if len(trainer_extras)>0:
         trainer_config = replace(trainer_config, **trainer_extras)
-
-    if trainer_config.wandb_run_name is None:
-        trainer_config = replace(trainer_config, wandb_run_name=trainer_config.out_dir)
 
     assert trainer_config.out_dir is not None
     assert trainer_config.data_dir is not None
@@ -47,8 +50,8 @@ def do_train(trainer_config:TrainerConfig, model_config:GPTConfig, model:GPT, sa
     
     os.makedirs(trainer_config.out_dir,exist_ok=True)
 
-    print("Model config:", model_config._to_dict())
-    print("Training config:", trainer_config._to_dict())
+    print("Model config:", asdict(model_config))
+    print("Training config:", asdict(trainer_config))
 
     if os.getenv("RANK",-1)==-1:
         train_local(trainer_config, model_config, model, save_config)
@@ -117,12 +120,12 @@ def parse(val:str):
         return bool(val)
     
     try:
-        return float(val)
+        return int(val)
     except:
         pass
-    
+
     try:
-        return int(val)
+        return float(val)
     except:
         pass
     
@@ -134,16 +137,18 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, required=False, help="Data directory override.")
-    parser.add_argument("--trainer_config_file", "-C", type=str, required=False, default=None, help="Trainer config file")
-    parser.add_argument("--model_config_file", "-M", type=str, required=False, default=None, help="Model config file")
+    parser.add_argument("--out_dir", type=str, required=False, help="Output directory override.")
+    parser.add_argument("--trainer_config_file", "-C", type=str, required=True, default=None, help="Trainer config file")
+    parser.add_argument("--model_config_file", "-M", type=str, required=True, default=None, help="Model config file")
     args, extra = parser.parse_known_args()
     
     data_dir = args.data_dir
+    out_dir = args.out_dir
     trainer_config_file = args.trainer_config_file
     model_config_file = args.model_config_file
-
+ 
     keys = [extra[i][2:] for i in range(0, len(extra),2)]
     values = [extra[i] for i in range(1, len(extra),2)]
     kv = {k: parse(v) for k,v in zip(keys, values)}
 
-    main_with_config(data_dir, trainer_config_file, model_config_file, kv)
+    main_with_config(data_dir, out_dir, trainer_config_file, model_config_file, kv)

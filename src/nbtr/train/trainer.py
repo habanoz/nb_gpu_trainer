@@ -46,7 +46,7 @@ class TrainerConfig:
     eval_iters: int = 200
     promised_flops:float=65e12 # Tesla T4 on fp16
     ## training logging
-    log_to: List[str] = []
+    log_to: List[str] = None
     wandb_project: str = None
     wandb_run_name: str = None
     wandb_run_id: str = None
@@ -63,13 +63,11 @@ class TrainerConfig:
         
         return TrainerConfig(**doc)
 
-    @staticmethod
-    def to_yaml(config:TrainerConfig, config_file:str):
-        assert isinstance(config, TrainerConfig)
+    def to_yaml(self, config_file:str):
         import yaml
 
         with open(config_file, "w") as f:
-            yaml.dump(asdict(config), f, indent=2)
+            yaml.dump(asdict(self), f, indent=2)
 
 @dataclass
 class TrainingState:
@@ -209,12 +207,6 @@ class Trainer:
         
         return optimizer
     
-    def _init_logging(self):
-        if self.config.wandb_log and self.rank==0:
-            import wandb
-            # wandb.require("core")
-            wandb.init(project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, resume="allow", config=asdict(self.config))
-    
     @torch.inference_mode()
     def evaluate(self, model:nn.Module)->Dict[str,EvalResult]:
         out = {}
@@ -255,7 +247,7 @@ class Trainer:
         if self.config.gc:
             model.gradient_checkpointing=True
         
-        with self.init_logger(raw_model) as wb_run:
+        with self.init_logger(raw_model) as logger:
             X, Y = self.get_batch('train')
             
             start_iter = 0 if self.state.iter_num == 0 else self.state.iter_num+1
@@ -273,7 +265,7 @@ class Trainer:
                     torch.randint(1024, (self.config.batch_size,))
             elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
-                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, wb_run, 0.0)
+                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, logger, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
@@ -328,10 +320,10 @@ class Trainer:
                     print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
                     if it>0 and it % self.config.eval_interval == 0:
-                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run, mfu)
+                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, logger, mfu)
 
     def init_logger(self, model):
-        return TrainingLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config)|asdict(model.config))
+        return TrainingLogger(self.config.log_to, config=self.config)
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run, mfu):
         if self.rank != 0:

@@ -18,41 +18,15 @@ do
             min_lr=$(awk "BEGIN {print $lr/10}")
             out_dir="mup_examples/mutransfer_lr_owt/sp/out/width${width}_depth${LAYERS}_seed${seed}_lr${lr}"
             $LAUNCHER -m nbtr.cli_train \
-                --out_dir=$out_dir \
-                --eval_interval=1 \
-                --log_interval=1 \
-                --eval_iters=1 \
-                --eval_only=False \
-                --skip_val_loss=True \
-                --always_save_checkpoint=False \
-                --never_save_checkpoint=True \
-                --init_from='scratch' \
-                --wandb_log=False \
-                --csv_log=True \
-                --dataset='openwebtext' \
-                --gradient_accumulation_steps=1 \
-                --batch_size=32 \
-                --block_size=1024 \
-                --n_layer=2 \
-                --n_head=$n_heads \
-                --n_embd=$width \
-                --dropout=0.0 \
-                --bias=False \
-                --init_std=0.02 \
-                --learning_rate=$lr \
-                --lr_decay_iters=1000 \
-                --min_lr=$min_lr \
-                --max_iters=1000 \
-                --weight_decay=1e-1 \
-                --beta1=0.9 \
-                --beta2=0.95 \
-                --grad_clip=1.0 \
-                --decay_lr=True \
-                --seed=$seed \
-                --backend='nccl' \
-                --device='cuda' \
-                --dtype='bfloat16' \
-                --compile=True
+                --trainer_config "config/news_trainer.yml" \
+                --model_config "config/news_model.yml" \
+                --out_dir $out_dir \
+                --data_dir 'data/news-tr-1.8M-tokenizer-8k' \
+                --model.n_head $n_heads \
+                --model.n_embed $width \
+                --learning_rate $lr \
+                --min_lr $min_lr \
+                --seed $seed
         done
     done
 done

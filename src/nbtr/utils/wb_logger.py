@@ -16,6 +16,7 @@ class CsvLoggerBackend(Backend):
     def log(self, message):
         
         if self.csv_logger is None:
+            import csv
             self.csv_logger = csv.DictWriter(self.file, fieldnames=list(message))
             self.csv_logger.writeheader()
 

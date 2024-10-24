@@ -23,13 +23,11 @@ class GPTConfig:
         
         return GPTConfig(**doc)
     
-    @staticmethod
-    def to_yaml(config:GPTConfig, config_file:str):
-        assert isinstance(config, GPTConfig)
+    def to_yaml(self, config_file:str):
         import yaml
 
         with open(config_file, "w") as f:
-            yaml.dump(asdict(config), f, indent=2)
+            yaml.dump(asdict(self), f, indent=2)
 
 class MLP(nn.Module):
     def __init__(self, config) -> None:
