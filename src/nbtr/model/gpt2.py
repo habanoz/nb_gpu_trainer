@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -22,6 +22,14 @@ class GPTConfig:
             doc = yaml.safe_load(f)
         
         return GPTConfig(**doc)
+    
+    @staticmethod
+    def to_yaml(config:GPTConfig, config_file:str):
+        assert isinstance(config, GPTConfig)
+        import yaml
+
+        with open(config_file, "w") as f:
+            yaml.dump(asdict(config), f, indent=2)
 
 class MLP(nn.Module):
     def __init__(self, config) -> None:

@@ -15,10 +15,6 @@ class HfTrainerConfig():
         self.init_repo_id = init_repo_id
         self._trainer_config = trainer_config
 
-        if self._trainer_config.out_dir is None:
-            out_dir = repo_id.split("/")[-1]
-            self._trainer_config = replace(self._trainer_config, out_dir=out_dir)
-
         assert trainer_config.data_dir is not None, "Data dir cannot be None"
 
         super().__init__()

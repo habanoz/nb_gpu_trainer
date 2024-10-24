@@ -7,11 +7,11 @@ import math
 import time
 import datetime
 from collections import defaultdict
-from typing import Any, Dict
+from typing import Any, Dict, List
 from ..utils.mfu import estimate_mfu
 from enum import Enum
 from ..model.trainer_model import TrainerModel
-from nbtr.utils.wb_logger import WandBLogger
+from nbtr.utils.wb_logger import TrainingLogger
 
 @dataclass
 class TrainerConfig:
@@ -45,8 +45,8 @@ class TrainerConfig:
     eval_interval: int = 250 # must be multiple of log interval
     eval_iters: int = 200
     promised_flops:float=65e12 # Tesla T4 on fp16
-    ## wandb logging
-    wandb_log: bool = False
+    ## training logging
+    log_to: List[str] = []
     wandb_project: str = None
     wandb_run_name: str = None
     wandb_run_id: str = None
@@ -62,6 +62,14 @@ class TrainerConfig:
             doc = yaml.safe_load(f)
         
         return TrainerConfig(**doc)
+
+    @staticmethod
+    def to_yaml(config:TrainerConfig, config_file:str):
+        assert isinstance(config, TrainerConfig)
+        import yaml
+
+        with open(config_file, "w") as f:
+            yaml.dump(asdict(config), f, indent=2)
 
 @dataclass
 class TrainingState:
@@ -323,7 +331,7 @@ class Trainer:
                         self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, wb_run, mfu)
 
     def init_logger(self, model):
-        return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config)|asdict(model.config))
+        return TrainingLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config)|asdict(model.config))
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run, mfu):
         if self.rank != 0:
