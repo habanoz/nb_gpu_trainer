@@ -17,6 +17,7 @@ class CsvLoggerBackend(Backend):
         
         if self.csv_logger is None:
             import csv
+            print("Dic headers", list(message))
             self.csv_logger = csv.DictWriter(self.file, fieldnames=list(message))
             self.csv_logger.writeheader()
 

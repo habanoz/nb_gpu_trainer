@@ -14,6 +14,13 @@ class GPTConfig:
     n_layer: int = 12
     dropout: float = 0.1
 
+    mup_enabled: bool = False # Whether to use muP. If False then all other mup variables are ignored
+    mup_disable_attention_scaling: bool = False # Disables mup attention scaling
+    mup_disable_hidden_lr_scaling: bool = False # Disables mup hidden LR scaling
+    mup_width_multiplier: float = 1 # `mup_width_multiplier = width / base_width` where base_width is typically 256
+    mup_input_alpha: float = 1 # Optional tunable multiplier applied to input embedding forward pass output
+    mup_output_alpha: float = 1 # Optional tunable multiplier applied to output unembedding forward pass output
+
     @staticmethod
     def from_yaml(config_file:str):
         import yaml

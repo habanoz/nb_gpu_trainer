@@ -11,7 +11,9 @@ from typing import Any, Dict, List
 from ..utils.mfu import estimate_mfu
 from enum import Enum
 from ..model.trainer_model import TrainerModel
-from nbtr.utils.wb_logger import TrainingLogger
+from nbtr.utils.training_logger import TrainingLogger
+from nbtr.utils.mup_session import MupSession
+
 
 @dataclass
 class TrainerConfig:
@@ -50,6 +52,15 @@ class TrainerConfig:
     wandb_project: str = None
     wandb_run_name: str = None
     wandb_run_id: str = None
+
+    # MUP
+    mup_enabled:bool = False # Whether to use muP. If False then all other mup variables are ignored
+    mup_disable_attention_scaling = False # Uses 1/sqrt(d_head) attn scaling instead of 1/d_head (Only needed for the step-by-step coord check in the blog)
+    mup_disable_hidden_lr_scaling = False # Disables muP hidden LR adjustment (Only needed for the step-by-step coord check in the blog)
+    mup_width_multiplier = 1.0 # mup_width_multiplier = width / base_width where base_width is typically 256
+    mup_input_alpha = 1.0 # Optional tunable multiplier applied to input embedding forward pass output
+    mup_output_alpha = 1.0 # Optional tunable multiplier applied to output unembedding forward pass output
+    mup_enable_coord_check_logging = False # If True will track the output.abs().mean() of various layers throughout training
     
     def __post_init__(self):
         self.lr_decay_iters = self.lr_decay_iters if self.lr_decay_iters else self.max_iters
@@ -247,7 +258,8 @@ class Trainer:
         if self.config.gc:
             model.gradient_checkpointing=True
         
-        with self.init_logger(raw_model) as logger:
+        mup = MupSession(model=model, config=self.config) 
+        with TrainingLogger(self.config.log_to, config=self.config) as logger:
             X, Y = self.get_batch('train')
             
             start_iter = 0 if self.state.iter_num == 0 else self.state.iter_num+1
@@ -265,7 +277,7 @@ class Trainer:
                     torch.randint(1024, (self.config.batch_size,))
             elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
-                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, logger, 0.0)
+                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, logger, mup.last_coord_check_dict, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
@@ -275,17 +287,19 @@ class Trainer:
                 # forward the model
                 if t0 == 0:
                     t0 = time.time()
-                for micro_batch in range(self.config.gradient_accumulation_steps):
-                    if self.world_size>1 and micro_batch == self.config.gradient_accumulation_steps - 1:
-                        self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
-                    with self.ctx:
-                        _, loss = model(X, Y)
-                        loss = loss / self.config.gradient_accumulation_steps
-                        
-                    # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                    X, Y = self.get_batch('train')
+                
+                with next(mup):
+                    for micro_batch in range(self.config.gradient_accumulation_steps):
+                        if self.world_size>1 and micro_batch == self.config.gradient_accumulation_steps - 1:
+                            self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
+                        with self.ctx:
+                            _, loss = model(X, Y)
+                            loss = loss / self.config.gradient_accumulation_steps
+                            
+                        # immediately async prefetch next batch while model is doing the forward pass on the GPU
+                        X, Y = self.get_batch('train')
 
-                    scaler.scale(loss).backward()
+                        scaler.scale(loss).backward()
                 
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
@@ -320,19 +334,16 @@ class Trainer:
                     print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
                     if it>0 and it % self.config.eval_interval == 0:
-                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, logger, mfu)
+                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, logger, mup.last_coord_check_dict, mfu)
 
-    def init_logger(self, model):
-        return TrainingLogger(self.config.log_to, config=self.config)
-
-    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run, mfu):
+    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, train_logger, mup_iter, mfu):
         if self.rank != 0:
             return
         
         t0 = time.time()
         eval_out = self.evaluate(model)
-                
-        wb_run.log({
+
+        log_message = {
                     "iter": it,
                     "train/loss": eval_out['train'].loss,
                     "val/loss": eval_out['val'].loss,
@@ -340,7 +351,12 @@ class Trainer:
                     "lr": lr,
                     "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     "mfu": mfu,
-                })
+                }
+
+        if mup_iter:
+            log_message |= mup_iter
+
+        train_logger.log(log_message)
             
         
         new_val_loss = eval_out['val'].loss

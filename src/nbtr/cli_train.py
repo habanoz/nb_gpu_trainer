@@ -38,6 +38,13 @@ def main_with_config(data_dir, out_dir, trainer_config_file, model_config_file, 
     assert trainer_config.wandb_project is not None
     
     gpt_config = GPTConfig.from_yaml(model_config_file)
+    
+    gpt_config = replace(gpt_config, mup_enabled=trainer_config.mup_enabled)
+    gpt_config = replace(gpt_config, mup_disable_attention_scaling=trainer_config.mup_disable_attention_scaling)
+    gpt_config = replace(gpt_config, mup_disable_hidden_lr_scaling=trainer_config.mup_disable_hidden_lr_scaling)
+    gpt_config = replace(gpt_config, mup_width_multiplier=trainer_config.mup_width_multiplier)
+    gpt_config = replace(gpt_config, mup_input_alpha=trainer_config.mup_input_alpha)
+    gpt_config = replace(gpt_config, mup_output_alpha=trainer_config.mup_output_alpha)
 
     if len(model_extras)>0:
         gpt_config = replace(gpt_config, **model_extras)

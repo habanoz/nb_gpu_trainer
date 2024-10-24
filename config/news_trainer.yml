@@ -26,3 +26,5 @@ log_to:
 #  - wandb
   - csv
 wandb_project: MUP-GPT2-Small
+
+mup_enabled: True
