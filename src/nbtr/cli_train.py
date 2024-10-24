@@ -12,12 +12,7 @@ import argparse
 import os
 from time import time
 
-def main_with_repo_id(repo_id, hf_training_config, hf_model_config):
-    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
-    
-    hf_train(hf_training_config, hf_model.config, hf_model, False)
-
-def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, extras:dict, init_repo_id=None):
+def load_trainer_config_file(repo_id, data_dir, trainer_config_file, extras):
     trainer_config = TrainerConfig.from_yaml(trainer_config_file)
     
     if data_dir is not None:
@@ -37,11 +32,31 @@ def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, 
     assert trainer_config.wandb_run_id is not None
     assert trainer_config.wandb_project is not None
     
+    return trainer_config
+
+def main_with_repo_id(repo_id, hf_training_config, hf_model_config):
+    hf_model = HfModel.from_pretrained_or_config(repo_id=repo_id, hf_model_config=hf_model_config, device="cpu")
+    
+    hf_train(hf_training_config, hf_model.config, hf_model, False)
+
+def main_with_init(repo_id, init_repo_id, data_dir, trainer_config_file, extras:dict):
+    trainer_config = load_trainer_config_file(repo_id, data_dir, trainer_config_file, extras)
+    
+    hf_model_config = HfModelConfig.from_pretrained(init_repo_id)
+    hf_model = HfModel.from_pretrained(repo_id=init_repo_id, device="cpu")
+
+    hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config, init_repo_id=init_repo_id)
+    
+    hf_train(hf_trainer_config, hf_model_config, hf_model, True)
+    
+def main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, extras:dict):
+    trainer_config = load_trainer_config_file(repo_id, data_dir, trainer_config_file, extras)
+    
     gpt_config = GPTConfig.from_yaml(model_config_file)
     hf_model_config = HfModelConfig(gpt_config=gpt_config)
     hf_model = HfModel.from_pretrained_or_config(repo_id=init_repo_id if init_repo_id else repo_id, hf_model_config=hf_model_config, device="cpu")
 
-    hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config, init_repo_id=init_repo_id)
+    hf_trainer_config = HfTrainerConfig(repo_id=repo_id, trainer_config=trainer_config)
     
     hf_train(hf_trainer_config, hf_model_config, hf_model, True)
 
@@ -161,6 +176,8 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     trainer_config_file = args.trainer_config_file
     model_config_file = args.model_config_file
+    
+    assert init_repo_id is None or model_config_file is None, "Init repo and model config file cannot be specified together."
 
     keys = [extra[i][2:] for i in range(0, len(extra),2)]
     values = [extra[i] for i in range(1, len(extra),2)]
@@ -169,7 +186,7 @@ if __name__ == '__main__':
     hf_training_config = get_hf_training_config_from_repo(repo_id)
     hf_model_config = get_hf_model_config_from_repo(repo_id)
 
-    if (trainer_config_file is None or model_config_file is None)  and (hf_training_config is None or hf_model_config is None):
+    if (trainer_config_file is None or (model_config_file is None and init_repo_id is None ))  and (hf_training_config is None or hf_model_config is None):
         print("This is a brand-new training job. Provide training configuration file and model configuration file!!!")  
     elif hf_training_config is not None:
         if (trainer_config_file is not None or model_config_file is not None):
@@ -177,4 +194,7 @@ if __name__ == '__main__':
         assert hf_model_config is not None, "Model config not found in the repo. Create a new repo!!! "
         main_with_repo_id(repo_id, hf_training_config, hf_model_config)
     else:
-        main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv, init_repo_id)
+        if init_repo_id:
+            main_with_init(repo_id, init_repo_id, data_dir, trainer_config_file, kv)
+        else:
+            main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)

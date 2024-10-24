@@ -43,7 +43,7 @@ class HfTrainerConfig():
         with open(config_file) as f:
             doc = json.load(f)
 
-        return HfTrainerConfig(repo_id=repo_id, trainer_config=TrainerConfig(**doc['trainer_config']))
+        return TrainerConfig(**doc['trainer_config'])
 
     def save(self):
         if not os.path.exists(self.trainer_config.out_dir):
@@ -59,4 +59,9 @@ class HfTrainerConfig():
         return os.path.join(self.trainer_config.out_dir, FILE_NAME)
 
     def _to_dict(self):
-        return {"repo_id": self.repo_id, "trainer_config": asdict(self.trainer_config)}
+        _dict = {"repo_id": self.repo_id, "trainer_config": asdict(self.trainer_config)}
+        
+        if self.init_repo_id:
+            _dict["init_repo_id"]=self.init_repo_id
+        
+        return _dict
