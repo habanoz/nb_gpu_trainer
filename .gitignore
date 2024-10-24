@@ -14,3 +14,4 @@ wandb/
 tokenizer.model
 tokenizer.vocab
 *.egg-info/
+mup_examples
