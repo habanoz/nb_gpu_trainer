@@ -85,6 +85,7 @@ class Trainer:
         self.rank = rank
         self.world_size = world_size
         self.device = "cuda" if world_size == 1 else f"cuda:{rank}"
+        self.batch_rng = torch.Generator(device=self.device)
         
         self.state = state if state is not None else TrainingState()
         assert self.state.iter_num < config.max_iters
@@ -134,7 +135,7 @@ class Trainer:
         else:
             data = np.memmap(os.path.join(self.config.data_dir, 'val.bin'), dtype=np.uint16, mode='r')
         
-        ix = torch.randint(len(data) - self.config.seq_length, (self.config.batch_size,))
+        ix = torch.randint(len(data) - self.config.seq_length, (self.config.batch_size,), generator=self.batch_rng)
         x = torch.stack([torch.from_numpy((data[i:i+self.config.seq_length]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+self.config.seq_length]).astype(np.int64)) for i in ix])
         
@@ -213,14 +214,12 @@ class Trainer:
         model.eval()
         for split in ['train', 'val']:
             losses = torch.zeros(self.config.eval_iters)
-            perplexities = torch.zeros(self.config.eval_iters)
             for k in range(self.config.eval_iters):
                 X, Y = self.get_batch(split)
                 with self.ctx:
                     _, loss = model(X, Y)
                 losses[k] = loss.item()
-                perplexities[k] = torch.exp(loss).item()
-            out[split] = EvalResult(loss=losses.mean().item(), perplexity=perplexities.mean().item())
+            out[split] = EvalResult(loss=losses.mean().item(), perplexity=losses.exp().mean().item())
         model.train()
         return out
 
@@ -229,7 +228,6 @@ class Trainer:
         # assert model.device == DEVICE, f"Only CUDA device is supported for training. Model is in :{model.device}"
         assert self.config.seq_length == raw_model.config.seq_length, f"Sequence length for model and trainer is not equal {self.config.seq_length}!={raw_model.config.seq_length}"
 
-        torch.manual_seed(self.config.seed)
         torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
@@ -256,13 +254,13 @@ class Trainer:
             mfu = 0
             t0 = 0
             
-            # if resuming a training, replay torch.randints to avoid sampling the same examples.
+            # start_iter is to accommodate for resuming training
+            # If training is resuming, random state is reshuffled to avoid using same samples for training...
+            torch.manual_seed(self.config.seed+self.rank+start_iter)
+            self.batch_rng.manual_seed(self.config.seed+self.rank+start_iter)
+            
             if self.state.iter_num > 0:
                 self.skip_first_new_best_val_loss = False
-                random_seed_replay_count = self.state.iter_num *self.config.gradient_accumulation_steps + (self.state.iter_num//self.config.eval_interval)*self.config.eval_iters
-                for i in range(random_seed_replay_count):
-                    # I am not sure whether range matters
-                    torch.randint(1024, (self.config.batch_size,))
             elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
                 self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, wb_run, 0.0)
