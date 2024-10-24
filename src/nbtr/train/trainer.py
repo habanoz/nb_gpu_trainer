@@ -85,7 +85,7 @@ class Trainer:
         self.rank = rank
         self.world_size = world_size
         self.device = "cuda" if world_size == 1 else f"cuda:{rank}"
-        self.batch_rng = torch.Generator(device="cuda")
+        self.batch_rng = torch.Generator()
         
         self.state = state if state is not None else TrainingState()
         assert self.state.iter_num < config.max_iters
