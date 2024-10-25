@@ -43,7 +43,7 @@ class HfTrainerConfig():
         with open(config_file) as f:
             doc = json.load(f)
 
-        return TrainerConfig(**doc['trainer_config'])
+        return HfTrainerConfig(**doc['trainer_config'])
 
     def save(self):
         if not os.path.exists(self.trainer_config.out_dir):
