@@ -8,7 +8,7 @@ import torch.version
 
 @dataclass
 class GPTConfig:
-    seq_length: int =  1024
+    seq_length: int = 1024
     vocab_size: int = 50304
     n_embed: int = 768
     n_head: int = 12
@@ -115,8 +115,8 @@ class CausalSelfAttention(nn.Module):
         
         self.rotary_emb = LlamaRotaryEmbedding(
                 self.head_dim,
-                max_position_embeddings=self.max_position_embeddings,
-                base=self.rope_theta,
+                max_position_embeddings=config.seq_length,
+                base=10000.0 #self.rope_theta,
             )
         
         # regularization
