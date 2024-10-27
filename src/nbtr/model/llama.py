@@ -227,7 +227,7 @@ class GPT(nn.Module):
         B, T = idx.size()
         assert T <= self.config.seq_length, f"Input sequence length ({T}) cannot be larger than model sequence lenfgth {self.config.seq_length} "
 
-        # self.freqs_cis = self.freqs_cis.to(device)
+        self.freqs_cis = self.freqs_cis.to(device)
         freqs_cis = self.freqs_cis[:T]
         
         x = self.transformer.wte(idx)
