@@ -6,6 +6,7 @@ import os
 from torch.nn import Module
 from huggingface_hub import HfApi
 from concurrent.futures import ThreadPoolExecutor
+import traceback
 
 class HFBackedTrainer:
     num_workers = 2
@@ -48,6 +49,7 @@ class HFBackedTrainer:
             self.trainer.train(model=model, raw_model=model)
         except Exception as e:
             print("Error: "+str(e))
+            print(traceback.format_exc())
 
         # wait until jobs are complete
         self.executor.shutdown()
