@@ -186,15 +186,18 @@ if __name__ == '__main__':
     hf_training_config = get_hf_training_config_from_repo(repo_id)
     hf_model_config = get_hf_model_config_from_repo(repo_id)
 
-    if (trainer_config_file is None or (model_config_file is None and init_repo_id is None ))  and (hf_training_config is None or hf_model_config is None):
-        print("This is a brand-new training job. Provide training configuration file and model configuration file!!!")  
-    elif hf_training_config is not None:
-        if (trainer_config_file is not None or model_config_file is not None):
-            print("Configuration is fetched from the repo. Configuration files are ignored.!!!")
-        assert hf_model_config is not None, "Model config not found in the repo. Create a new repo!!! "
-        main_with_repo_id(repo_id, hf_training_config, hf_model_config)
-    else:
-        if init_repo_id:
-            main_with_init(repo_id, init_repo_id, data_dir, trainer_config_file, kv)
+    try:
+        if (trainer_config_file is None or (model_config_file is None and init_repo_id is None ))  and (hf_training_config is None or hf_model_config is None):
+            print("This is a brand-new training job. Provide training configuration file and model configuration file!!!")  
+        elif hf_training_config is not None:
+            if (trainer_config_file is not None or model_config_file is not None):
+                print("Configuration is fetched from the repo. Configuration files are ignored.!!!")
+            assert hf_model_config is not None, "Model config not found in the repo. Create a new repo!!! "
+            main_with_repo_id(repo_id, hf_training_config, hf_model_config)
         else:
-            main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)
+            if init_repo_id:
+                main_with_init(repo_id, init_repo_id, data_dir, trainer_config_file, kv)
+            else:
+                main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)
+    except Exception as e:
+        print("Training failed", e)
