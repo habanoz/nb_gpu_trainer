@@ -196,13 +196,15 @@ class GPT(nn.Module):
         # weight-tying
         self.transformer.wte.weight = self.lm_head.weight
         
-        self.freqs_cis = precompute_freqs_cis(
+        freqs_cis = precompute_freqs_cis(
             config.n_embed // config.n_head,
             config.seq_length * 2,
             5e+5, # config.rope_theta,
             False #config.use_scaled_rope,
         )
 
+        self.register_buffer("freqs_cis", freqs_cis)
+                    
         # init all weights
         self.apply(self._init_weights)
 
@@ -227,7 +229,6 @@ class GPT(nn.Module):
         B, T = idx.size()
         assert T <= self.config.seq_length, f"Input sequence length ({T}) cannot be larger than model sequence lenfgth {self.config.seq_length} "
 
-        self.freqs_cis = self.freqs_cis.to(device)
         freqs_cis = self.freqs_cis[:T]
         
         x = self.transformer.wte(idx)
