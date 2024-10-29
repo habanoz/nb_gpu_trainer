@@ -206,7 +206,7 @@ class GPT(nn.Module):
         freqs_cis = precompute_freqs_cis(
             config.n_embed // config.n_head,
             config.seq_length * 2,
-            1e+4, # config.rope_theta,
+            5e+5, # config.rope_theta,
             False #config.use_scaled_rope,
         )
 
