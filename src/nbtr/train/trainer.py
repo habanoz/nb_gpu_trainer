@@ -156,7 +156,7 @@ class Trainer:
         return lr
     
     def get_lr(self, it):
-        return self.get_wsd_lr(it)
+        return self.get_cosine_lr(it)
     
     # learning rate decay scheduler (cosine with warmup)
     def get_cosine_lr(self, it):
