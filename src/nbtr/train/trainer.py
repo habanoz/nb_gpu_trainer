@@ -154,9 +154,12 @@ class Trainer:
             param_group['lr'] = lr
         
         return lr
-        
-    # learning rate decay scheduler (cosine with warmup)
+    
     def get_lr(self, it):
+        return self.get_cosine_lr(it)
+    
+    # learning rate decay scheduler (cosine with warmup)
+    def get_cosine_lr(self, it):
         # 1) linear warmup for warmup_iters steps
         if it < self.config.warmup_iters:
             return self.config.learning_rate * it / self.config.warmup_iters
@@ -170,6 +173,26 @@ class Trainer:
         assert 0 <= decay_ratio <= 1
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
         return self.config.min_lr + coeff * (self.config.learning_rate - self.config.min_lr)
+    
+    def get_wsd_lr(self, it):
+        # 1) linear warmup for warmup_iters steps
+        if it < self.config.warmup_iters:
+            return self.config.learning_rate * it / self.config.warmup_iters
+        
+        N = self.config.max_iters
+        warmdown_ratio = 0.2
+        N_decay = N*warmdown_ratio
+        N_before_decay = N-N_decay
+                
+        # 2) stable
+        if it <= N_before_decay:
+            return self.config.learning_rate
+        
+        # 3) warmdown
+        
+        decay_lr = self.config.learning_rate * (1-np.sqrt( (it-N_before_decay) / N_decay))
+        assert decay_lr>=0,"Negative not valid!"
+        return decay_lr
 
     def _configure_optimizers(self, model):
         # start with all of the candidate parameters
