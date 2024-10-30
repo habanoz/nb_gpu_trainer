@@ -128,6 +128,22 @@ class CausalSelfAttention(nn.Module):
         # output projection
         y = self.resid_dropout(self.c_proj(y))
         return y
+
+class MLP(nn.Module):
+    def __init__(self, config) -> None:
+        super().__init__()
+
+        self.c_fc = nn.Linear(config.n_embed, config.n_embed * 4, bias=False)
+        self.gelu = nn.GELU()
+        self.c_proj = nn.Linear(config.n_embed * 4, config.n_embed, bias=False)
+        self.dropout = nn.Dropout(config.dropout)
+    
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
     
 class Block(nn.Module):
     def __init__(self, config) -> None:
