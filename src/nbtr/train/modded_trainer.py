@@ -382,7 +382,8 @@ class Trainer:
                     scaler.step(optimizer)
                     
                 scaler.update()
-                optimizers.zero_grad(set_to_none=True)
+                for optimizer in optimizers:
+                    optimizer.zero_grad(set_to_none=True)
                 
                 if self.rank == 0 and it % self.config.log_interval == 0:
                     loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
