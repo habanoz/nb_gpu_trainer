@@ -12,6 +12,7 @@ from ..utils.mfu import estimate_mfu
 from enum import Enum
 from ..model.trainer_model import TrainerModel
 from nbtr.utils.wb_logger import WandBLogger
+import torch.distributed as dist
 
 def zeropower_via_svd(G, steps=None):
     U, S, V = G.svd()
