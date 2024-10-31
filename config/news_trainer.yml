@@ -2,15 +2,14 @@
 seq_length: 512
 gradient_accumulation_steps: 1
 batch_size: 128
-max_iters : 30000
+max_iters : 15000
 warmup_iters: 2000
 dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.0018
-min_lr: 0.00018
-decay_lr: True
+learning_rate:  0.02
+decay_lr: False # WSD in play
 
 # optimizer
 weight_decay: 0.1

@@ -1,4 +1,4 @@
-from nbtr.train.trainer import TrainerConfig, Trainer
+from nbtr.train.modded_trainer import TrainerConfig, Trainer
 from nbtr.train.ddp_trainer import DDPTrainer
 from nbtr.train.hf_backed_trainer import HFBackedTrainer
 from nbtr.model.hf_model import HfModel
