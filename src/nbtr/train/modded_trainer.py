@@ -31,7 +31,7 @@ def zeropower_via_newtonschulz5(G, steps=10, eps=1e-7):
     """
     assert len(G.shape) == 2
     a, b, c = (3.4445, -4.7750,  2.0315)
-    X = G.bfloat16()
+    X = G.float()
     X /= (X.norm() + eps) # ensure top singular value <= 1
     if G.size(0) > G.size(1):
         X = X.T
@@ -85,7 +85,7 @@ class Muon(torch.optim.Optimizer):
 
             # generate weight updates in distributed fashion
             total_params = sum(p.numel() for p in group['params'])
-            updates_flat = torch.zeros(total_params, device='cuda', dtype=torch.bfloat16)
+            updates_flat = torch.zeros(total_params, device='cuda', dtype=torch.float32)
             curr_idx = 0
             for i, p in enumerate(group['params']):
                 # luckily this will perfectly distribute a transformer with multiple of 4 layers to 8 GPUs
