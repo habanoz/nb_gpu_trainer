@@ -10,108 +10,7 @@ from collections import defaultdict
 from typing import Any, Dict
 from ..utils.mfu import estimate_mfu
 from enum import Enum
-from ..model.trainer_model import TrainerModel
 from nbtr.utils.wb_logger import WandBLogger
-import torch.distributed as dist
-
-def zeropower_via_svd(G, steps=None):
-    U, S, V = G.svd()
-    return U @ V.T
-
-def zeropower_via_newtonschulz5(G, steps=10, eps=1e-7):
-    """
-    Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
-    quintic iteration whose coefficients are selected to maximize the slope at zero. For the purpose
-    of minimizing steps, it turns out to be empirically effective to keep increasing the slope at
-    zero even beyond the point where the iteration no longer converges all the way to one everywhere
-    on the interval. This iteration therefore does not produce UV^T but rather something like US'V^T
-    where S' is diagonal with S_{ii}' \sim Uniform(0.5, 1.5), which turns out not to hurt model
-    performance at all relative to UV^T, where USV^T = G is the SVD.
-    """
-    assert len(G.shape) == 2
-    a, b, c = (3.4445, -4.7750,  2.0315)
-    X = G.float()
-    X /= (X.norm() + eps) # ensure top singular value <= 1
-    if G.size(0) > G.size(1):
-        X = X.T
-    for _ in range(steps):
-        A = X @ X.T
-        B = A @ X
-        X = a * X + b * B + c * A @ B
-    if G.size(0) > G.size(1):
-        X = X.T
-    return X
-
-zeropower_backends = dict(svd=zeropower_via_svd, newtonschulz5=zeropower_via_newtonschulz5)
-
-class Muon(torch.optim.Optimizer):
-    """
-    Muon - MomentUm Orthogonalized by Newton-schulz
-
-    Muon internally runs standard SGD-momentum, and then performs an orthogonalization post-
-    processing step, in which each 2D parameter's update is replaced with the nearest orthogonal
-    matrix. To efficiently orthogonalize each update, we use a Newton-Schulz iteration, which has
-    the advantage that it can be stably run in bfloat16 on the GPU.
-
-    Some warnings:
-    - This optimizer assumes that all parameters passed in are 2D.
-    - It should not be used for the embedding layer, the final fully connected layer, or any {0,1}-D
-    parameters; those should all be optimized by a standard method (e.g., AdamW).
-    - To use it with 4D convolutional filters, it works well to just flatten their last 3 dimensions.
-    - We believe it is unlikely to work well for training with small batch size.
-    - We believe it may not work well for finetuning pretrained models, but we haven't tested this.
-    - We have not yet tried this optimizer for training scenarios larger than NanoGPT (124M).
-
-    Arguments:
-        lr: The learning rate used by the internal SGD.
-        momentum: The momentum used by the internal SGD.
-        nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
-        backend: The chosen backend for the orthogonalization step. (recommended: 'newtonschulz5')
-        backend_steps: The number of iteration steps to use in the backend, if it is iterative.
-    """
-    def __init__(self, params, lr=0.02, momentum=0.95, nesterov=True,
-                 backend='newtonschulz5', backend_steps=5):
-        defaults = dict(lr=lr, momentum=momentum, nesterov=nesterov, backend=backend, backend_steps=backend_steps)
-        super().__init__(params, defaults)
-
-    def step(self):
-
-        for group in self.param_groups:
-
-            lr = group['lr']
-            momentum = group['momentum']
-            zeropower_backend = zeropower_backends[group['backend']]
-
-            # generate weight updates in distributed fashion
-            total_params = sum(p.numel() for p in group['params'])
-            updates_flat = torch.zeros(total_params, device='cuda', dtype=torch.float32)
-            curr_idx = 0
-            for i, p in enumerate(group['params']):
-                # luckily this will perfectly distribute a transformer with multiple of 4 layers to 8 GPUs
-                if i % int(os.environ['WORLD_SIZE']) == int(os.environ['RANK']):
-                    g = p.grad
-                    assert g is not None
-                    state = self.state[p]
-                    if 'momentum_buffer' not in state:
-                        state['momentum_buffer'] = torch.zeros_like(g)
-                    buf = state['momentum_buffer']
-                    buf.mul_(momentum).add_(g)
-                    if group['nesterov']:
-                        g = g.add(buf, alpha=momentum)
-                    g = zeropower_backend(g, steps=group['backend_steps'])
-                    g *= max(1, g.size(0)/g.size(1))**0.5
-                    updates_flat[curr_idx:curr_idx+p.numel()] = g.flatten()
-                curr_idx += p.numel()
-
-            # sync updates across devices. we are not memory-constrained so can do this simple deserialization
-            dist.all_reduce(updates_flat, op=dist.ReduceOp.SUM)
-
-            # deserialize and apply updates
-            curr_idx = 0
-            for p in group['params']:
-                g = updates_flat[curr_idx:curr_idx+p.numel()].view_as(p.data).type_as(p.data)
-                p.data.add_(g, alpha=-lr)
-                curr_idx += p.numel()
                 
 @dataclass
 class TrainerConfig:
@@ -244,52 +143,86 @@ class Trainer:
         y = y.pin_memory().to(self.device, non_blocking=True)
 
         return x, y
-
-
-    def get_wsd_lr(self, it):
-        assert it <= self.config.max_iters
-        # 1) linear warmup for warmup_iters steps
-        if it < self.config.warmup_iters:
-            return (it+1) / self.config.warmup_iters
-        # 2) constant lr for a while
-        elif it < self.config.max_iters - self.config.warmup_iters:
-            return 1.0
-        # 3) linear warmdown
-        else:
-            warmdown_iters = self.config.max_iters*0.2 # 20%
-            decay_ratio = (self.config.max_iters - it) / warmdown_iters
-        return decay_ratio
     
+    def update_lr(self, it, optimizer):
+        if not self.config.decay_lr:
+            return self.config.learning_rate
+        
+        lr = self.get_lr(it)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+        
+        return lr
+    
+    def get_lr(self, it):
+        return self.get_cosine_lr(it)
+    
+    # learning rate decay scheduler (cosine with warmup)
     def get_cosine_lr(self, it):
         # 1) linear warmup for warmup_iters steps
         if it < self.config.warmup_iters:
-            return (it+1) / self.config.warmup_iters
+            return self.config.learning_rate * it / self.config.warmup_iters
         
         # 2) if it > lr_decay_iters, return min learning rate
         if it > self.config.lr_decay_iters:
-            # return self.config.min_lr / self.config.learning_rate
-            return 0.1
+            return self.config.min_lr
         
         # 3) in between, use cosine decay down to min learning rate
         decay_ratio = (it - self.config.warmup_iters) / (self.config.lr_decay_iters - self.config.warmup_iters)
         assert 0 <= decay_ratio <= 1
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
-        # return (self.config.min_lr / self.config.learning_rate) + coeff * (self.config.learning_rate - self.config.min_lr)/self.config.learning_rate
-        return 0.1 * coeff * 0.9
+        return self.config.min_lr + coeff * (self.config.learning_rate - self.config.min_lr)
+    
+    def get_wsd_lr(self, it):
+        # 1) linear warmup for warmup_iters steps
+        if it < self.config.warmup_iters:
+            return self.config.learning_rate * it / self.config.warmup_iters
+        
+        N = self.config.max_iters
+        warmdown_ratio = 0.2
+        N_decay = N*warmdown_ratio
+        N_before_decay = N-N_decay
+                
+        # 2) stable
+        if it <= N_before_decay:
+            return self.config.learning_rate
+        
+        # 3) warmdown
+        
+        decay_lr = self.config.learning_rate * (1-np.sqrt( (it-N_before_decay) / N_decay))
+        assert decay_lr>=0,"Negative not valid!"
+        return decay_lr
     
     def _configure_optimizers(self, model):
-
-        # init the optimizer(s)
-        optimizer1 = torch.optim.Adam([model.transformer.wte.weight], lr=0.3, betas=(self.config.beta1, self.config.beta2), fused=True)
-        optimizer2 = torch.optim.Adam([model.lm_head.weight], lr=0.003, betas=(self.config.beta1, self.config.beta2), fused=True)
-        optimizer3 = Muon(model.transformer.h.parameters(), lr=self.config.learning_rate, momentum=self.config.beta2)
-        optimizers = [optimizer1, optimizer2, optimizer3]
-
-        if self.state.optim_state is not None:
-            raise Exception("State load not supported yet!!!!")
-            # optimizer.load_state_dict(self.state.optim_state)
+        # start with all of the candidate parameters
+        param_dict = {pn: p for pn, p in model.named_parameters()}
         
-        return optimizers
+        # filter out those that do not require grad
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+
+        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
+        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+        
+        optim_groups = [
+            {'params': decay_params, 'weight_decay': self.config.weight_decay},
+            {'params': nodecay_params, 'weight_decay': 0.0}
+        ]
+        
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in nodecay_params)
+
+        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+        
+        betas = (self.config.beta1, self.config.beta2)
+        optimizer = torch.optim.AdamW(optim_groups, lr=self.config.learning_rate, betas=betas, fused=True)
+        
+        if self.state.optim_state is not None:
+            optimizer.load_state_dict(self.state.optim_state)
+        
+        return optimizer
     
     def _init_logging(self):
         if self.config.wandb_log and self.rank==0:
@@ -326,8 +259,7 @@ class Trainer:
             print("compiling the model done!")
         
         scaler = torch.amp.GradScaler(self.device, enabled=(self.config.dtype == 'float16'))
-        optimizers = self._configure_optimizers(raw_model)
-        schedulers = [torch.optim.lr_scheduler.LambdaLR(opt, self.get_wsd_lr) for opt in optimizers]
+        optimizer = self._configure_optimizers(model)
 
         # start training
         model.train()
@@ -353,7 +285,7 @@ class Trainer:
                 self.skip_first_new_best_val_loss = False
             elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
-                self.do_eval(raw_model, optimizers, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, schedulers, wb_run, 0.0)
+                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.get_lr(0), wb_run, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
@@ -372,17 +304,13 @@ class Trainer:
 
                     scaler.scale(loss).backward()
                 
-                for optimizer in optimizers:
-                    scaler.unscale_(optimizer)
-                
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_norm_clip)
                     
-                for optimizer in optimizers:
-                    scaler.step(optimizer)
-                    
+                scaler.step(optimizer)
                 scaler.update()
-                for optimizer in optimizers:
-                    optimizer.zero_grad(set_to_none=True)
+                
+                optimizer.zero_grad(set_to_none=True)
                 
                 if self.rank == 0 and it % self.config.log_interval == 0:
                     loss_sum = loss.item() * self.config.gradient_accumulation_steps # GPU/CPU sync point
@@ -409,12 +337,12 @@ class Trainer:
                     print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
                     if it>0 and it % self.config.eval_interval == 0:
-                        self.do_eval(raw_model, optimizers, running_fwd_bwd_tokens_per_sec, running_iter_time, it, schedulers, wb_run, mfu)
+                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, self.get_lr(it), wb_run, mfu)
 
     def init_logger(self, model):
         return WandBLogger(enabled=(self.config.wandb_log and self.rank==0), project=self.config.wandb_project, name=self.config.wandb_run_name, id=self.config.wandb_run_id, config=asdict(self.config)|asdict(model.config))
 
-    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, schedulers, wb_run, mfu):
+    def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, wb_run, mfu):
         if self.rank != 0:
             return
         
@@ -426,7 +354,7 @@ class Trainer:
                     "train/loss": eval_out['train'].loss,
                     "val/loss": eval_out['val'].loss,
                     "val/perplexity": eval_out['val'].perplexity,
-                    "lr": schedulers[-1].get_last_lr(),
+                    "lr": lr,
                     "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     "mfu": mfu,
                 })
