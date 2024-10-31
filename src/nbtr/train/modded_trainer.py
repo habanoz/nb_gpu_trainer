@@ -433,7 +433,8 @@ class Trainer:
         
         new_val_loss = eval_out['val'].loss
         if  new_val_loss < self.state.best_val_loss:
-            self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
+            # self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=optimizer.state_dict())
+            self.state = TrainingState(iter_num=it, best_val_loss=new_val_loss, optim_state=dict())
             
             self.on_new_best_val_loss(model)
                 
