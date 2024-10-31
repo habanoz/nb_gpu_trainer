@@ -326,7 +326,7 @@ class Trainer:
             print("compiling the model done!")
         
         scaler = torch.amp.GradScaler(self.device, enabled=(self.config.dtype == 'float16'))
-        optimizers = self._configure_optimizers(model)
+        optimizers = self._configure_optimizers(raw_model)
         schedulers = [torch.optim.lr_scheduler.LambdaLR(opt, self.get_wsd_lr) for opt in optimizers]
 
         # start training
