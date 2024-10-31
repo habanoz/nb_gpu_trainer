@@ -18,7 +18,6 @@ def zeropower_via_svd(G, steps=None):
     U, S, V = G.svd()
     return U @ V.T
 
-@torch.compile
 def zeropower_via_newtonschulz5(G, steps=10, eps=1e-7):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
