@@ -88,14 +88,14 @@ class MLP(nn.Module):
         super().__init__()
 
         self.c_fc = nn.Linear(config.n_embed, config.n_embed * 4, bias=False)
-        self.gelu = nn.GELU()
+        # self.gelu = nn.GELU()
         self.c_proj = nn.Linear(config.n_embed * 4, config.n_embed, bias=False)
         self.dropout = nn.Dropout(config.dropout)
     
     def forward(self, x):
         x = self.c_fc(x)
-        x = self.gelu(x)
-        # x = F.relu(x).square()
+        # x = self.gelu(x)
+        x = F.relu(x).square()
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
@@ -167,11 +167,11 @@ class Block(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
 
-        self.ln_1 = nn.LayerNorm(config.n_embed, bias=False)
-        # self.ln_1 = nn.RMSNorm(config.n_embed, eps=1e-5)
+        # self.ln_1 = nn.LayerNorm(config.n_embed, bias=False)
+        self.ln_1 = nn.RMSNorm(config.n_embed, eps=1e-5)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embed, bias=False)
-        # self.ln_2 = nn.RMSNorm(config.n_embed, eps=1e-5)
+        # self.ln_2 = nn.LayerNorm(config.n_embed, bias=False)
+        self.ln_2 = nn.RMSNorm(config.n_embed, eps=1e-5)
         self.mlp = MLP(config)
 
     def forward(self, x, freqs_cis):
@@ -197,8 +197,8 @@ class GPT(nn.Module):
                 h = nn.ModuleList(
                     [Block(config) for _ in range(config.n_layer)]
                 ),
-                ln_f = nn.LayerNorm(config.n_embed, bias=False)
-                # ln_f = nn.RMSNorm(config.n_embed, eps=1e-5)
+                # ln_f = nn.LayerNorm(config.n_embed, bias=False)
+                ln_f = nn.RMSNorm(config.n_embed, eps=1e-5)
             )
         )
 
