@@ -11,6 +11,7 @@ from dataclasses import replace, asdict
 import argparse
 import os
 from time import time
+import traceback
 
 def load_trainer_config_file(repo_id, data_dir, trainer_config_file, extras):
     trainer_config = TrainerConfig.from_yaml(trainer_config_file)
@@ -200,4 +201,5 @@ if __name__ == '__main__':
             else:
                 main_with_config(repo_id, data_dir, trainer_config_file, model_config_file, kv)
     except Exception as e:
-        print("Training failed", e)
+        print("Training failed", str(e))
+        print(traceback.format_exc())
