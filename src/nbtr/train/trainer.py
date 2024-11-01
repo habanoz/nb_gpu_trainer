@@ -127,24 +127,41 @@ class Trainer:
         else:
             self.skip_first_new_best_val_loss = False
 
-    def get_batch(self, split):
+    def get_batch(self, split, it, mit=0):
+        B = self.config.batch_size
+        T = self.config.seq_length
+        
         # We recreate np.memmap every batch to avoid a memory leak, as per
         # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
         if split == 'train':
+            WS = self.world_size
+            rank = self.rank
+            GA = self.config.gradient_accumulation_steps
             data = np.memmap(os.path.join(self.config.data_dir, 'train.bin'), dtype=np.uint16, mode='r')
         else:
+            WS = 1
+            rank = 0
+            GA = 1
+            mit = 0 # no micro batches for evaluation
             data = np.memmap(os.path.join(self.config.data_dir, 'val.bin'), dtype=np.uint16, mode='r')
         
-        ix = torch.randint(len(data) - self.config.seq_length, (self.config.batch_size,), generator=self.batch_rng)
-        x = torch.stack([torch.from_numpy((data[i:i+self.config.seq_length]).astype(np.int64)) for i in ix])
-        y = torch.stack([torch.from_numpy((data[i+1:i+1+self.config.seq_length]).astype(np.int64)) for i in ix])
+        BT = B*T
+        BTGA = BT*GA
+        N = (len(data)-1)//(BTGA*WS)
+        it = it % N
+        current_position = rank*BTGA + it*BTGA*WS + mit*BT
+        
+        buf = data[current_position : current_position+BT+1]
+        buf = torch.tensor(buf.astype(np.int32), dtype=torch.long)
+        x = (buf[:-1]).view(B, T) # inputs
+        y = (buf[1:]).view(B, T) # targets
         
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x = x.pin_memory().to(self.device, non_blocking=True)
-        y = y.pin_memory().to(self.device, non_blocking=True)
+        x = x.to(self.device, non_blocking=True)
+        y = y.to(self.device, non_blocking=True)
 
         return x, y
-
+    
     def update_lr(self, it, optimizer):
         if not self.config.decay_lr:
             return self.config.learning_rate
@@ -238,7 +255,7 @@ class Trainer:
         for split in ['train', 'val']:
             losses = torch.zeros(self.config.eval_iters)
             for k in range(self.config.eval_iters):
-                X, Y = self.get_batch(split)
+                X, Y = self.get_batch(split, k)
                 with self.ctx:
                     _, loss = model(X, Y)
                 losses[k] = loss.item()
@@ -269,13 +286,13 @@ class Trainer:
             model.gradient_checkpointing=True
         
         with self.init_logger(raw_model) as wb_run:
-            X, Y = self.get_batch('train')
-            
             start_iter = 0 if self.state.iter_num == 0 else self.state.iter_num+1
             running_fwd_bwd_tokens_per_sec = 0
             running_iter_time = 0
             mfu = 0
             t0 = 0
+            
+            X, Y = self.get_batch('train', start_iter, 0)
             
             # start_iter is to accommodate for resuming training
             # If training is resuming, random state is reshuffled to avoid using same samples for training...
@@ -304,7 +321,7 @@ class Trainer:
                         loss = loss / self.config.gradient_accumulation_steps
                         
                     # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                    X, Y = self.get_batch('train')
+                    X, Y = self.get_batch('train', it, micro_batch+1)
 
                     scaler.scale(loss).backward()
                 
