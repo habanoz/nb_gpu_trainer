@@ -1,15 +1,15 @@
 
 seq_length: 512
 gradient_accumulation_steps: 1
-batch_size: 128
-max_iters : 30000
+batch_size: 64
+max_iters : 10000
 warmup_iters: 2000
 dtype: float16
 compile: False
     
 # learning rate
-learning_rate:  0.0006
-min_lr: 0.00006
+learning_rate:  0.0018
+min_lr: 0.00018
 decay_lr: True
 
 # optimizer
@@ -24,4 +24,4 @@ eval_iters: 100
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
-wandb_project: Haber-GPT-2.1-Small
+wandb_project: Haber-GPT-2.1-40M
