@@ -331,7 +331,8 @@ class Trainer:
                 self.skip_first_new_best_val_loss = False
             elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
-                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.get_lr(0), wb_run, 0.0)
+                # self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.get_lr(0), wb_run, 0.0)
+                pass
             
             for it in range(start_iter, self.config.max_iters+1):
                 
