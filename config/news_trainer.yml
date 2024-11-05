@@ -1,7 +1,7 @@
 
 seq_length: 512
-gradient_accumulation_steps: 18
-batch_size: 32
+gradient_accumulation_steps: 15
+batch_size: 40
 max_iters : 20000
 warmup_iters: 2000
 dtype: float16
