@@ -24,4 +24,4 @@ eval_iters: 100
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
 wandb_log: True
-wandb_project: Haber-GPT-2.1-40M
+wandb_project: Haber-GPT-2.1-100M
