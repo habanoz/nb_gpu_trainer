@@ -17,7 +17,10 @@ do
             head_size=64
             n_heads=$((width / head_size))
             min_lr=$(awk "BEGIN {print $lr/10}")
-            out_dir="mup_examples/mutransfer_lr_owt/sp/out/width${width}_depth${LAYERS}_seed${seed}_lr${lr}"
+            mup_base_width=256
+            # mup_width_multiplier=$(echo "scale=8; $width/$mup_base_width" | bc -l)
+            mup_width_multiplier=$(awk "BEGIN {print $width/$mup_base_width}")
+            out_dir="mup_examples/mutransfer_lr_owt/mup/out/width${width}_depth${LAYERS}_seed${seed}_lr${lr}"
             $LAUNCHER -m nbtr.cli_train \
                 --trainer_config "config/news_trainer.yml" \
                 --model_config "config/news_model.yml" \
@@ -27,7 +30,11 @@ do
                 --model.n_embed $width \
                 --learning_rate $lr \
                 --min_lr $min_lr \
-                --seed $seed
+                --seed $seed \
+                --mup_enabled True \
+                --mup_width_multiplier $mup_width_multiplier \
+                --mup_input_alpha 1.0 \
+                --mup_output_alpha 1.0
         done
     done
 done

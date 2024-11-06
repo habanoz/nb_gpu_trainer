@@ -57,10 +57,10 @@ class TrainerConfig:
     mup_enabled:bool = False # Whether to use muP. If False then all other mup variables are ignored
     mup_disable_attention_scaling = False # Uses 1/sqrt(d_head) attn scaling instead of 1/d_head (Only needed for the step-by-step coord check in the blog)
     mup_disable_hidden_lr_scaling = False # Disables muP hidden LR adjustment (Only needed for the step-by-step coord check in the blog)
-    mup_width_multiplier = 1.0 # mup_width_multiplier = width / base_width where base_width is typically 256
-    mup_input_alpha = 1.0 # Optional tunable multiplier applied to input embedding forward pass output
-    mup_output_alpha = 1.0 # Optional tunable multiplier applied to output unembedding forward pass output
-    mup_enable_coord_check_logging = False # If True will track the output.abs().mean() of various layers throughout training
+    mup_width_multiplier:float = 1.0 # mup_width_multiplier = width / base_width where base_width is typically 256
+    mup_input_alpha:float = 1.0 # Optional tunable multiplier applied to input embedding forward pass output
+    mup_output_alpha:float = 1.0 # Optional tunable multiplier applied to output unembedding forward pass output
+    mup_enable_coord_check_logging:bool = True # If True will track the output.abs().mean() of various layers throughout training
     
     def __post_init__(self):
         self.lr_decay_iters = self.lr_decay_iters if self.lr_decay_iters else self.max_iters
@@ -194,21 +194,49 @@ class Trainer:
         # filter out those that do not require grad
         param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
 
-        # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-        # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        
-        optim_groups = [
-            {'params': decay_params, 'weight_decay': self.config.weight_decay},
-            {'params': nodecay_params, 'weight_decay': 0.0}
-        ]
-        
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodecay_params = sum(p.numel() for p in nodecay_params)
+        assert self.config.mup_enabled
 
-        print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+        if self.config.mup_enabled and not self.config.mup_disable_hidden_lr_scaling:
+            ### Begin muP code ###
+            mup_decay_params = []
+            decay_params = []
+            nodecay_params = []
+            for n, p in param_dict.items():
+                if p.dim() >= 2:
+                    if n.endswith('c_attn.weight') or n.endswith('c_fc.weight') or n.endswith('c_proj.weight'):
+                        mup_decay_params.append(p)
+                    else:
+                        decay_params.append(p)
+                else:
+                    nodecay_params.append(p)
+            optim_groups = [
+                {'params': mup_decay_params, 'weight_decay': self.config.weight_decay, 'lr_scale': 1/self.config.mup_width_multiplier},
+                {'params': decay_params, 'weight_decay': self.config.weight_decay, 'lr_scale': 1},
+                {'params': nodecay_params, 'weight_decay': 0.0, 'lr_scale': 1}
+            ]
+            num_mup_decay_params = sum(p.numel() for p in mup_decay_params)
+            num_decay_params = sum(p.numel() for p in decay_params)
+            num_nodecay_params = sum(p.numel() for p in nodecay_params)
+            print(f"num mup decayed parameter tensors: {len(mup_decay_params)}, with {num_mup_decay_params:,} parameters")
+            print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+            print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+            ### End muP code ###
+        else:
+            # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
+            # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+            decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+            nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+            
+            optim_groups = [
+                {'params': decay_params, 'weight_decay': self.config.weight_decay},
+                {'params': nodecay_params, 'weight_decay': 0.0}
+            ]
+            
+            num_decay_params = sum(p.numel() for p in decay_params)
+            num_nodecay_params = sum(p.numel() for p in nodecay_params)
+
+            print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+            print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
         
         betas = (self.config.beta1, self.config.beta2)
         optimizer = torch.optim.AdamW(optim_groups, lr=self.config.learning_rate, betas=betas, fused=True)
@@ -258,7 +286,7 @@ class Trainer:
         if self.config.gc:
             model.gradient_checkpointing=True
         
-        mup = MupSession(model=model, config=self.config) 
+        mup_sessn = MupSession(model=model, config=self.config) 
         with TrainingLogger(self.config.log_to, config=self.config) as logger:
             X, Y = self.get_batch('train')
             
@@ -277,7 +305,7 @@ class Trainer:
                     torch.randint(1024, (self.config.batch_size,))
             elif self.rank == 0:
                 # do not evaluate before-hand if resuming...
-                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, logger, mup.last_coord_check_dict, 0.0)
+                self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, start_iter, self.config.learning_rate, logger, mup_sessn.last_coord_check_dict, 0.0)
             
             for it in range(start_iter, self.config.max_iters+1):
                 
@@ -288,7 +316,7 @@ class Trainer:
                 if t0 == 0:
                     t0 = time.time()
                 
-                with next(mup):
+                with next(mup_sessn):
                     for micro_batch in range(self.config.gradient_accumulation_steps):
                         if self.world_size>1 and micro_batch == self.config.gradient_accumulation_steps - 1:
                             self.trigger_callbacks(TrainerEvent.ON_LAST_MICRO_BATCH, model)
@@ -334,7 +362,7 @@ class Trainer:
                     print(f"iter {it}: loss {loss_sum:.4f}, iter_time {iter_time*1000:.2f}ms, run_iter_time {running_iter_time*1000:.2f}ms, fb_toks/sec {fwd_bwd_tokens_per_sec:.2f}, run_fb_toks/sec {running_fwd_bwd_tokens_per_sec:.2f}, mfu {mfu:.3f}")
 
                     if it>0 and it % self.config.eval_interval == 0:
-                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, logger, mup.last_coord_check_dict, mfu)
+                        self.do_eval(raw_model, optimizer, running_fwd_bwd_tokens_per_sec, running_iter_time, it, lr, logger, mup_sessn.last_coord_check_dict, mfu)
 
     def do_eval(self, model, optimizer, running_fwd_bwd_tokens_per_sec, time_per_iter, it, lr, train_logger, mup_iter, mfu):
         if self.rank != 0:

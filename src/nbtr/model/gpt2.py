@@ -67,6 +67,7 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embed = config.n_embed
         self.dropout = config.dropout
+        self.config = config
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         if not self.flash:
@@ -84,13 +85,20 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        if self.config.mup_enabled and not self.config.mup_disable_attention_scaling:
+            ### Begin muP code ###
+            attention_scale = 1.0 / k.size(-1)
+            ### End muP code ###
+        else:
+            attention_scale = 1.0 / math.sqrt(k.size(-1))
+        
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         if self.flash:
             # efficient attention using Flash Attention CUDA kernels
-            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True, scale=attention_scale)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = (q @ k.transpose(-2, -1)) * attention_scale
             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
@@ -145,8 +153,17 @@ class GPT(nn.Module):
 
         # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
-            if pn.endswith('c_proj.weight'):
-                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
+            init_std = 0.02
+            if config.mup_enabled:
+                ### Begin muP code ###
+                # Adjust hidden weight initialization variance by 1 / mup_width_multiplier
+                if pn.endswith('c_attn.weight') or pn.endswith('c_fc.weight'):
+                    torch.nn.init.normal_(p, mean=0.0, std=init_std / math.sqrt(config.mup_width_multiplier))
+                elif pn.endswith('c_proj.weight'):
+                    torch.nn.init.normal_(p, mean=0.0, std=init_std / math.sqrt(2 * config.n_layer * config.mup_width_multiplier))
+                ### End muP code ###
+            elif pn.endswith('c_proj.weight'):
+                torch.nn.init.normal_(p, mean=0.0, std=init_std / math.sqrt(2 * config.n_layer))
 
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
@@ -170,6 +187,11 @@ class GPT(nn.Module):
         pos_embd = self.transformer.wpe(pos)
         x = self.transformer.drop(tok_embd + pos_embd)
 
+        if self.config.mup_enabled:
+            ### Begin muP code ###
+            x *= self.config.mup_input_alpha
+            ### End muP code ###
+
         for block in self.transformer.h:
             if self._gradient_checkpointing and self.training:
                 x = gc(block,x, use_reentrant=True)
@@ -178,11 +200,19 @@ class GPT(nn.Module):
             
         x = self.transformer.ln_f(x)
         
-        logits = self.lm_head(x)
-        loss = None
-        
         if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            if self.config.mup_enabled:
+                ### Begin muP code ###
+                # Scaling `x` instead of `logits` allows coord check to log change
+                x *= self.config.mup_output_alpha / self.config.mup_width_multiplier
+                ### End muP code ###
+            logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+        else:
+            # inference-time mini-optimization: only forward the lm_head on the very last position
+            logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
+            loss = None
 
         return logits, loss
 
