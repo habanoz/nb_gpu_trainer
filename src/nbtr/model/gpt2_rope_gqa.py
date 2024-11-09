@@ -186,11 +186,11 @@ class Block(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
 
-        # self.ln_1 = nn.LayerNorm(config.n_embed, bias=False)
-        self.ln_1 = nn.RMSNorm(config.n_embed)
+        self.ln_1 = nn.LayerNorm(config.n_embed, bias=False)
+        # self.ln_1 = nn.RMSNorm(config.n_embed)
         self.attn = CausalSelfAttention(config)
-        # self.ln_2 = nn.LayerNorm(config.n_embed, bias=False)
-        self.ln_2 = nn.RMSNorm(config.n_embed)
+        self.ln_2 = nn.LayerNorm(config.n_embed, bias=False)
+        # self.ln_2 = nn.RMSNorm(config.n_embed)
         self.mlp = MLP(config)
 
     def forward(self, x, freqs_cis):
@@ -216,8 +216,8 @@ class GPT(nn.Module):
                 h = nn.ModuleList(
                     [Block(config) for _ in range(config.n_layer)]
                 ),
-                # ln_f  = nn.LayerNorm(config.n_embed, bias=False)
-                ln_f  = nn.RMSNorm(config.n_embed)
+                ln_f  = nn.LayerNorm(config.n_embed, bias=False)
+                # ln_f  = nn.RMSNorm(config.n_embed)
             )
         )
 
