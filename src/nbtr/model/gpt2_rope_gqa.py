@@ -98,14 +98,14 @@ class MLP(nn.Module):
         super().__init__()
 
         self.c_fc = nn.Linear(config.n_embed, config.n_embed * 4, bias=False)
-        # self.gelu = nn.GELU()
+        self.gelu = nn.GELU()
         self.c_proj = nn.Linear(config.n_embed * 4, config.n_embed, bias=False)
         self.dropout = nn.Dropout(config.dropout)
     
     def forward(self, x):
         x = self.c_fc(x)
-        # x = self.gelu(x)
-        x = F.relu(x).square()
+        x = self.gelu(x)
+        #x = F.relu(x).square()
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
