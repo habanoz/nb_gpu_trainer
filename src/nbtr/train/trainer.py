@@ -291,8 +291,8 @@ class Trainer:
         from torch.backends.cuda import enable_cudnn_sdp, enable_flash_sdp, enable_math_sdp, enable_mem_efficient_sdp
         enable_cudnn_sdp(False)
         enable_flash_sdp(False)
-        enable_mem_efficient_sdp(True)
-        enable_math_sdp(False)
+        enable_mem_efficient_sdp(False)
+        enable_math_sdp(True)
 
         # assert model.device == DEVICE, f"Only CUDA device is supported for training. Model is in :{model.device}"
         assert self.config.seq_length == raw_model.config.seq_length, f"Sequence length for model and trainer is not equal {self.config.seq_length}!={raw_model.config.seq_length}"
