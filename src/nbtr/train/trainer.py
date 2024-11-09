@@ -290,8 +290,8 @@ class Trainer:
         print("Use sdpA")
         from torch.backends.cuda import enable_cudnn_sdp, enable_flash_sdp, enable_math_sdp, enable_mem_efficient_sdp
         enable_cudnn_sdp(False)
-        enable_flash_sdp(True)
-        enable_mem_efficient_sdp(False)
+        enable_flash_sdp(False)
+        enable_mem_efficient_sdp(True)
         enable_math_sdp(False)
 
         # assert model.device == DEVICE, f"Only CUDA device is supported for training. Model is in :{model.device}"
