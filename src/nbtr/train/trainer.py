@@ -294,11 +294,11 @@ class Trainer:
         torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
-        if (compile is None and self.config.compile) or compile:
-            print("compiling the model...")
-            model = torch.compile(model)
-            print("compiling the model done!")
-        
+        #if (compile is None and self.config.compile) or compile:
+        print("compiling the model...")
+        model = torch.compile(model)
+        print("compiling the model done!")
+    
         scaler = torch.amp.GradScaler(self.device, enabled=(self.config.dtype == 'float16'))
         optimizer = self._configure_optimizers(model)
 
