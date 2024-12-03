@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import math
-
+from typing import Tuple
 @dataclass
 class GPTConfig:
     seq_length: int =  1024
