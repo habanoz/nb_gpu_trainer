@@ -1,5 +1,5 @@
 from huggingface_hub import HfApi
-from .gpt2_rope_gqa import GPT
+from .gpt2_light import GPT
 from .hf_model_config import HfModelConfig
 from transformers.utils import cached_file
 import torch
