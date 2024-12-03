@@ -66,7 +66,8 @@ class CausalSelfAttention(nn.Module):
         self.n_embed = config.n_embed
         
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embed, 3 * config.n_embed, bias=False)
+        self.c_attn = nn.Linear(config.n_embed, (self.n_head+2*self.n_kv_head)*self.head_dim, bias=False)
+        
         # output projection
         self.c_proj = nn.Linear(config.n_embed, config.n_embed, bias=False)
         
@@ -81,13 +82,11 @@ class CausalSelfAttention(nn.Module):
         
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embed)
-
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.n_embed, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head)
-        q = q.view(B, T, self.n_head, C // self.n_head)
-        v = v.view(B, T, self.n_head, C // self.n_head)
-
+        
+        qkv = self.c_attn(x)
+        q, k, v = qkv.split([self.n_head * self.head_dim, self.n_kv_head * self.head_dim, self.n_kv_head * self.head_dim], dim=-1)
+        q, k, v = map(lambda t: t.view(B, T, -1, self.head_dim), (q, k, v))  # (B, T, NH, HD)
+        
         # GQA
         ######################
         k = repeat_kv(k, self.n_rep)
