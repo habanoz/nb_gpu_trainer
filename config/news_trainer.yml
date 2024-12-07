@@ -2,7 +2,7 @@
 seq_length: 1024
 gradient_accumulation_steps: 6
 # batch_size: 40
-batch_size: 80
+batch_size: 100
 max_iters : 20000
 warmup_iters: 2000
 dtype: float16
@@ -20,9 +20,10 @@ beta2: 0.95
 
 # logging
 log_interval: 50
-eval_interval: 1000 # must be multiple of log interval
+# eval_interval: 1000 # must be multiple of log interval
+eval_interval: 200 # must be multiple of log interval
 eval_iters: 100
 promised_flops : 65.0e+12 # Tesla T4 on fp16
 ## wandb logging
-wandb_log: False
+wandb_log: True
 wandb_project: Haber-GPT-3-40M
