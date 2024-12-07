@@ -202,6 +202,9 @@ TRAIN_DATA_FILES = {
  "z_newstr_train_000009.bin": "1w2_2GVRmZVjLIQ-xIRxdmx9nv16gdvkp",
  "z_newstr_train_000010.bin": "1QOzB5pwbmWkJSKqxcy4Bqr4a4cEcMox3",
  }
+TRAIN_VAL_DATA_FILES = {
+ "train_000000.bin": "1bBTywzrmvokX57LP5pe2GSTO5N-N5xXS",
+}
 VAL_DATA_FILES={
  "val_000000.bin": "12IxOvGIBTO1wgp9C_P6BdVvQGuYCQpbj"
 }
@@ -240,7 +243,7 @@ class Trainer:
         if self.rank==0:
             # validation data loaders
             #val_train_ddl = DDL(f"{self.config.data_dir}/train_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
-            val_train_ddl = DDL(TRAIN_DATA_FILES[:1], f"{self.config.data_dir}/train/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, 1)
+            val_train_ddl = DDL(TRAIN_VAL_DATA_FILES, f"{self.config.data_dir}/train/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, 1)
             # val_ddl = DDL(f"{self.config.data_dir}/val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
             val_ddl = DDL(VAL_DATA_FILES, f"{self.config.data_dir}/val/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, 1)
             # newstr_val_ddl = DDL(f"{self.config.data_dir}/z_newstr_val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
