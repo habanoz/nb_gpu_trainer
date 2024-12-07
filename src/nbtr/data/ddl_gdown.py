@@ -43,8 +43,7 @@ def _download_data_with_retry(gd_id, filename, output_dir, download_function, ma
             time.sleep(wait_before_retry)
             
 def _download_file_in_background(gd_id, filename, output_dir, download_function=None):
-    fn_download = download_function if download_function else _download_data_with_retry
-    thread = threading.Thread(target=fn_download, args=(gd_id, filename, output_dir))
+    thread = threading.Thread(target=_download_data_with_retry, args=(gd_id, filename, output_dir, download_function))
     thread.daemon = True
     thread.start()
 
