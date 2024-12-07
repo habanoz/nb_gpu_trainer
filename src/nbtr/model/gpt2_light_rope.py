@@ -190,7 +190,6 @@ class GPT(nn.Module):
         self.transformer = nn.ModuleDict(
             dict(
                 wte = nn.Embedding(config.vocab_size, config.n_embed),
-                wpe = nn.Embedding(config.seq_length, config.n_embed),
                 h = nn.ModuleList(
                     [Block(config) for _ in range(config.n_layer)]
                 ),
