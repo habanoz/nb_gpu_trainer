@@ -82,3 +82,8 @@ class DistributedDataLoader:
         if self.current_position + (B * T * self.num_processes + 1) > len(self.tokens):
             self.advance()
         return x, y
+    
+    def replay_next_batch(self, it, grad_acc_steps=1):        
+        for i in range(it):
+            for k in range(grad_acc_steps):
+                self.next_batch()

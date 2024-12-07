@@ -12,7 +12,7 @@ from ..utils.mfu import estimate_mfu
 from enum import Enum
 from ..model.trainer_model import TrainerModel
 from nbtr.utils.wb_logger import WandBLogger
-
+from nbtr.data.ddl import DistributedDataLoader as DDL
 @dataclass
 class TrainerConfig:
     seed: int = 145
@@ -61,63 +61,7 @@ class TrainerConfig:
         with open(config_file) as f:
             doc = yaml.safe_load(f)
         
-        return TrainerConfig(**doc)
-
-
-class DataLoader:
-    def __init__(self, file, B, T, process_rank, num_processes, device):
-        self.process_rank = process_rank
-        self.num_processes = num_processes
-        self.B = B
-        self.T = T
-        self.file = file
-        self.device = device
-        
-        self.length = len(self.get_data())
-        self.current_position = None
-        
-        self.reset()
-        
-    def get_data(self):
-        return np.memmap(self.file, dtype=np.uint16, mode='r')
-
-    def reset(self):
-        self.current_position = self.process_rank * self.B * self.T
-
-    def next_batch(self):
-        B = self.B
-        T = self.T
-        BT = B*T
-        
-        data = self.get_data()[self.current_position : self.current_position+BT+1]
-        buf = torch.tensor(data, dtype=torch.long)
-        
-        x = (buf[:-1]).view(B, T) # inputs
-        y = (buf[1:]).view(B, T) # targets
-        
-        x = x.to(self.device, non_blocking=True)
-        y = y.to(self.device, non_blocking=True)
-        
-        # advance the start pointer in current shard
-        self.current_position += BT * self.num_processes
-        
-        # if loading the next batch would be out of bounds advance the shard
-        if self.current_position + (BT + 1) > self.length:
-            self.reset()
-        
-        return x, y
-    
-    def replay_next_batch(self, it, grad_acc_steps=1):
-        B = self.B
-        T = self.T
-        BT = B*T
-        
-        for i in range(it):
-            for k in range(grad_acc_steps):
-                self.current_position += BT * self.num_processes
-                if self.current_position + (BT + 1) > self.length:
-                    self.reset()
-        
+        return TrainerConfig(**doc)        
     
 @dataclass
 class TrainingState:
@@ -158,6 +102,16 @@ class Trainer:
         
         ## internal state
         self.skip_first_new_best_val_loss = True
+        
+        # train data loader
+        self.train_ddl = DDL(f"self.config.data_dir/*train_*.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        
+        # validation data loaders
+        val_train_ddl = DDL(f"self.config.data_dir/train_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        val_ddl = DDL(f"self.config.data_dir/val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        newstr_val_ddl = DDL(f"self.config.data_dir/z_newstr_val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        
+        self.val_loaders_dict = {"train":val_train_ddl, "val":val_ddl, "news_tr_val": newstr_val_ddl}
     
     def set_state(self, state: TrainingState):
         assert state is not None, "state cannot be None"
@@ -271,13 +225,18 @@ class Trainer:
     
     @torch.inference_mode()
     def evaluate(self, model:nn.Module)->Dict[str,EvalResult]:
+        
         out = {}
         model.eval()
-        for split in ['train', 'val']:
+        for split in ['train', 'val', 'news_tr_val']:
+            data_loader = self.val_loaders_dict[split]
+            data_loader.reset()
+            
             losses = torch.zeros(self.config.eval_iters)
+            
             for k in range(self.config.eval_iters):
-                data_loader = DataLoader(os.path.join(self.config.data_dir, f'{split}.bin'), self.config.batch_size, self.config.seq_length, 0, 1, self.device)
                 X, Y = data_loader.next_batch()
+                X, Y = X.to(self.device), Y.to(self.device)
                 
                 with self.ctx:
                     _, loss = model(X, Y)
@@ -315,12 +274,11 @@ class Trainer:
             mfu = 0
             t0 = 0
             
-            data_loader = DataLoader(os.path.join(self.config.data_dir, 'train.bin'), self.config.batch_size, self.config.seq_length, self.rank, self.world_size, self.device)
-            
             # if resuming a run, move data loader position to correct place
-            data_loader.replay_next_batch(start_iter, self.config.gradient_accumulation_steps)
+            self.train_ddl.replay_next_batch(start_iter, self.config.gradient_accumulation_steps)
             
-            X, Y = data_loader.next_batch()
+            X, Y = self.train_ddl.next_batch()
+            X, Y = X.to(self.device), Y.to(self.device)
             
             # start_iter is to accommodate for resuming training
             # If training is resuming, random state is reshuffled to avoid using same samples for training...
@@ -350,7 +308,8 @@ class Trainer:
                         loss = loss / self.config.gradient_accumulation_steps
                         
                     # immediately async prefetch next batch while model is doing the forward pass on the GPU
-                    X, Y = data_loader.next_batch()
+                    X, Y = self.train_ddl.next_batch()
+                    X, Y = X.to(self.device), Y.to(self.device)
 
                     scaler.scale(loss).backward()
                 
@@ -404,6 +363,7 @@ class Trainer:
                     "train/loss": eval_out['train'].loss,
                     "val/loss": eval_out['val'].loss,
                     "val/perplexity": eval_out['val'].perplexity,
+                    "newstr_val/loss": eval_out['news_tr_val'].loss,
                     "lr": lr,
                     "tokens/sec": running_fwd_bwd_tokens_per_sec,
                     "mfu": mfu,
