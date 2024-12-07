@@ -161,7 +161,7 @@ class Tokenizer:
 
                 # write any remaining tokens as the last shard
                 if token_count != 0:
-                    filename = os.path.join(data_dir, f"{split}_{shard_index:06d}.bin")
+                    filename = os.path.join(data_dir, f"{name}{split}_{shard_index:06d}.bin")
                     write_datafile(filename, (all_tokens_np[:token_count]).tolist())
 
     def _save_ids(self, dataset, data_dir, name="train"):
