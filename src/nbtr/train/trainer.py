@@ -234,14 +234,20 @@ class Trainer:
         self.skip_first_new_best_val_loss = True
         
         # train data loader
-        self.train_ddl = DDL(f"{self.config.data_dir}/*train_*.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        # self.train_ddl = DDL(f"{self.config.data_dir}/*train_*.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        self.train_ddl = DDL(TRAIN_DATA_FILES, f"{self.config.data_dir}/train/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, self.world_size)
         
-        # validation data loaders
-        val_train_ddl = DDL(f"{self.config.data_dir}/train_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
-        val_ddl = DDL(f"{self.config.data_dir}/val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
-        newstr_val_ddl = DDL(f"{self.config.data_dir}/z_newstr_val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
-        
-        self.val_loaders_dict = {"train":val_train_ddl, "val":val_ddl, "news_tr_val": newstr_val_ddl}
+        if self.rank==0:
+            # validation data loaders
+            #val_train_ddl = DDL(f"{self.config.data_dir}/train_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+            val_train_ddl = DDL(TRAIN_DATA_FILES[:1], f"{self.config.data_dir}/train/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, 1)
+            # val_ddl = DDL(f"{self.config.data_dir}/val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+            val_ddl = DDL(VAL_DATA_FILES, f"{self.config.data_dir}/val/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, 1)
+            # newstr_val_ddl = DDL(f"{self.config.data_dir}/z_newstr_val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+            newstr_val_ddl = DDL(NEWS_TR_VAL_DATA_FILES, f"{self.config.data_dir}/newstr_val/", self.config.batch_size, self.config.seq_length, self.rank, self.rank, 1)
+            
+            self.val_loaders_dict = {"train":val_train_ddl, "val":val_ddl, "news_tr_val": newstr_val_ddl}
+        else: self.val_loaders_dict = {}
     
     def set_state(self, state: TrainingState):
         assert state is not None, "state cannot be None"
@@ -358,7 +364,7 @@ class Trainer:
         
         out = {}
         model.eval()
-        for split in ['train', 'val', 'news_tr_val']:
+        for split in self.val_loaders_dict.keys():
             data_loader = self.val_loaders_dict[split]
             data_loader.reset()
             

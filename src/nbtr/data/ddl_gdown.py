@@ -48,7 +48,7 @@ def _download_file_in_background(gd_id, filename, output_dir, download_function=
     thread.start()
 
 class DistributedDataLoader:
-    def __init__(self, file_names_dict, output_dir, B, T, process_rank, local_process_rank, num_processes, fn_mock_download):
+    def __init__(self, file_names_dict, output_dir, B, T, process_rank, local_process_rank, num_processes, fn_mock_download=None):
         self.process_rank = process_rank
         self.local_process_rank = local_process_rank
         self.num_processes = num_processes
