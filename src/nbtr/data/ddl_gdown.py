@@ -59,8 +59,6 @@ class DistributedDataLoader:
         self.file_names_dict = file_names_dict
         self.fn_mock_download = fn_mock_download
         
-        os.makedirs(output_dir, exist_ok=True)
-
         assert len(self.files) > 0, f"did not find any files for name:{output_dir}"
 
         # kick things off
@@ -69,10 +67,20 @@ class DistributedDataLoader:
 
     def reset(self):
         if not os.path.exists(f"{self.output_dir}/{self.files[0]}") and self.local_process_rank==0:
+            os.makedirs(self.output_dir, exist_ok=True)
+            
             print("Downloading", f"{self.output_dir}/{self.files[0]}")
             gd_id = self.file_names_dict[self.files[0]]
             _download_data_with_retry(gd_id, self.files[0], self.output_dir, self.fn_mock_download)
             print("Downloaded", f"{self.output_dir}/{self.files[0]}")
+        
+        _check_cnt = 0
+        while not os.path.exists(f"{self.output_dir}/{self.files[0]}") and _check_cnt<10:
+            time.sleep(10)
+            _check_cnt+=1
+            
+        if _check_cnt>=10:
+            raise Exception(f"Unable to find file '{self.output_dir}/{self.files[0]}'")
             
         # we're being a bit clever here: if we already had shard 0 loaded,
         # then don't do the work to reload it, just reset the pointer
