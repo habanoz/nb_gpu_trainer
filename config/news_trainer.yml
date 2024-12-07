@@ -1,6 +1,6 @@
 
 seq_length: 1024
-gradient_accumulation_steps: 1
+gradient_accumulation_steps: 6
 batch_size: 40
 max_iters : 20000
 warmup_iters: 2000
