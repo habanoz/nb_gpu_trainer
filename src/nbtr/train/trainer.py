@@ -104,12 +104,12 @@ class Trainer:
         self.skip_first_new_best_val_loss = True
         
         # train data loader
-        self.train_ddl = DDL(f"self.config.data_dir/*train_*.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        self.train_ddl = DDL(f"{self.config.data_dir}/*train_*.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
         
         # validation data loaders
-        val_train_ddl = DDL(f"self.config.data_dir/train_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
-        val_ddl = DDL(f"self.config.data_dir/val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
-        newstr_val_ddl = DDL(f"self.config.data_dir/z_newstr_val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        val_train_ddl = DDL(f"{self.config.data_dir}/train_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        val_ddl = DDL(f"{self.config.data_dir}/val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
+        newstr_val_ddl = DDL(f"{self.config.data_dir}/z_newstr_val_000000.bin", self.config.batch_size, self.config.seq_length, self.rank, self.world_size)
         
         self.val_loaders_dict = {"train":val_train_ddl, "val":val_ddl, "news_tr_val": newstr_val_ddl}
     
