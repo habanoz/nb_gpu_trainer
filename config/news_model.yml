@@ -2,5 +2,5 @@ seq_length: 1024
 vocab_size: 8192
 n_embed: 512
 n_head: 8
-n_layer: 15
+n_layer: 12
 dropout: 0.0
