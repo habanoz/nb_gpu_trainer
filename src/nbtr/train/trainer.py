@@ -414,7 +414,8 @@ class Trainer:
             t0 = 0
             
             # if resuming a run, move data loader position to correct place
-            self.train_ddl.replay_next_batch(start_iter, self.config.gradient_accumulation_steps)
+            if start_iter > 0:
+                self.train_ddl.replay_next_batch(start_iter, self.config.gradient_accumulation_steps)
             
             X, Y = self.train_ddl.next_batch()
             X, Y = X.to(self.device), Y.to(self.device)

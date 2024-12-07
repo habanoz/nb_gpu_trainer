@@ -72,6 +72,7 @@ class DistributedDataLoader:
             print("Downloading", f"{self.output_dir}/{self.files[0]}")
             gd_id = self.file_names_dict[self.files[0]]
             _download_data_with_retry(gd_id, self.files[0], self.output_dir, self.fn_mock_download)
+            print("Downloaded", f"{self.output_dir}/{self.files[0]}")
             
         # we're being a bit clever here: if we already had shard 0 loaded,
         # then don't do the work to reload it, just reset the pointer
