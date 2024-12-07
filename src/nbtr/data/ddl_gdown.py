@@ -43,7 +43,8 @@ def _download_data_with_retry(gd_id, filename, output_dir, download_function, ma
             time.sleep(wait_before_retry)
             
 def _download_file_in_background(gd_id, filename, output_dir, download_function=None):
-    thread = threading.Thread(target=download_function, args=(gd_id, filename, output_dir))
+    fn_download = download_function if download_function else _download_data_with_retry
+    thread = threading.Thread(target=fn_download, args=(gd_id, filename, output_dir))
     thread.daemon = True
     thread.start()
 
@@ -68,7 +69,7 @@ class DistributedDataLoader:
         self.reset()
 
     def reset(self):
-        if not os.path.exists(f"{self.output_dir}/{self.files[0]}"):
+        if not os.path.exists(f"{self.output_dir}/{self.files[0]}") and self.local_process_rank==0:
             print("Downloading", f"{self.output_dir}/{self.files[0]}")
             gd_id = self.file_names_dict[self.files[0]]
             _download_data_with_retry(gd_id, self.files[0], self.output_dir, self.fn_mock_download)
@@ -81,14 +82,15 @@ class DistributedDataLoader:
             self.tokens = _load_data_shard(f"{self.output_dir}/{self.files[self.current_shard]}")
         self.current_position = 0
         
-        self.prepare_next_file()
+        if len(self.files)>1 and self.local_process_rank==0:
+            self.prepare_next_file()
 
     def advance(self): # advance to next data shard
         self.current_shard = (self.current_shard + 1) % len(self.files)
         self.current_position = 0
         self.tokens = _load_data_shard(f"{self.output_dir}/{self.files[self.current_shard]}")
         
-        if len(self.files)>2 and self.local_process_rank==0:
+        if len(self.files)>1 and self.local_process_rank==0:
             self.prepare_next_file()
     
     def prepare_next_file(self):
@@ -98,7 +100,7 @@ class DistributedDataLoader:
         next_shard = (self.current_shard + 1) % len(self.files)
         next_shard_file_name = self.files[next_shard]
         next_shard_file_name_gdid = self.file_names_dict[next_shard_file_name]
-        next_shard_file = f"{self.output_dir}/{self.files[next_shard]}"
+        next_shard_file = f"{self.output_dir}/{next_shard_file_name}"
         
         if not os.path.exists(next_shard_file) and self.local_process_rank==0:
             _download_file_in_background(next_shard_file_name_gdid, next_shard_file_name, self.output_dir, self.fn_mock_download)
