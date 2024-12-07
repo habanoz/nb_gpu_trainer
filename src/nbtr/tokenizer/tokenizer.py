@@ -5,6 +5,8 @@ import os
 from transformers.utils import cached_file
 from huggingface_hub import HfApi
 from tqdm import tqdm
+import multiprocess as mp
+from nbtr.data.data_common import write_datafile
 
 TOK_FILE_NAME="tokenizer.model"
 VOC_FILE_NAME="tokenizer.vocab"
@@ -54,7 +56,7 @@ class Tokenizer:
         print("Generating tokens!")
         return dataset.map(lambda example: self.encode(example[value_key]), batched=True, batch_size=500, remove_columns=columns, desc="tokenizing the splits")
     
-    def encode_ds_from_hub(self, dataset_repo_id, data_dir, value_key="text"):
+    def encode_ds_from_hub(self, dataset_repo_id, data_dir, filename, shard_size=None, value_key="text"):
         ds = load_dataset(dataset_repo_id)
         
         if 'validation' in ds:
@@ -64,15 +66,18 @@ class Tokenizer:
         
         if "val" not in ds:
             print("No validation split is found. Creating a validation split.")
-            ds = ds["train"].train_test_split(test_size=0.055, seed=2357, shuffle=True)
+            ds = ds["train"].train_test_split(test_size=0.001, seed=2357, shuffle=True)
             ds['val'] = ds.pop('test') # rename the test split to val
             print("Validation split created.")
         try:
-            self.encode_training_data(ds, data_dir, value_key)
+            if shard_size:
+                self.encode_training_data_shards(ds, data_dir, filename, shard_size, value_key)
+            else:
+                self.encode_training_data(ds, data_dir, filename, value_key)
         except Exception as e:
             print("Error:"+str(e))
 
-    def encode_training_data(self, dataset, data_dir, value_key="text"):
+    def encode_training_data(self, dataset, data_dir, name="", value_key="text"):
         assert "train" in dataset, "Dataset does not contain split 'train'!"
         assert "val" in dataset, "Dataset does not contain split 'val'!"
 
@@ -81,12 +86,14 @@ class Tokenizer:
         if not os.path.exists(data_dir):
             os.makedirs(data_dir)
 
+        if name: name=name+"_"
+        
         for split, dset in dataset.items():
             arr_len = sum(dset['len'])
 
             print(f"Split {split}, token count: {arr_len}")
             
-            filename = os.path.join(data_dir, f'{split}.bin')
+            filename = os.path.join(data_dir, f'{name}{split}.bin')
             arr = np.memmap(filename, dtype=np.uint16, mode='w+', shape=(arr_len,))
             
             total_batches = 1024*1024 if len(dset) > 1024*1024 else (1024 if len(dset) > 1024 else 1)
@@ -104,8 +111,58 @@ class Tokenizer:
             
             print(f"Saved '{split}' tokens.")
             
-        # self._save_ids(dataset,data_dir,"train")
-        # self._save_ids(dataset,data_dir,"val")
+    def encode_training_data_shards(self, dataset, data_dir, name="", shard_size=10**8, value_key="text"):
+        assert "train" in dataset, "Dataset does not contain split 'train'!"
+        assert "val" in dataset, "Dataset does not contain split 'val'!"
+        
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
+        
+        def encode_text_key(row):
+            text = row[value_key]
+            return self.encode(text)
+        
+        if name: name=name+"_"
+        
+        for split, dset in dataset.items():
+            # tokenize all documents and write output shards, each of shard_size tokens (last shard has remainder)
+            nprocs = max(1, os.cpu_count() - 2) # don't hog the entire system
+            with mp.Pool(nprocs) as pool:
+                shard_index = 0
+                # preallocate buffer to hold current shard
+                all_tokens_np = np.empty((shard_size,), dtype=np.uint16)
+                token_count = 0
+                progress_bar = None
+
+                for encoded in pool.imap(encode_text_key, dset, chunksize=16):
+                    tokens = encoded['input_ids']
+                    # is there enough space in the current shard for the new tokens?
+                    if token_count + len(tokens) < shard_size:
+                        # simply append tokens to current shard
+                        all_tokens_np[token_count:token_count+len(tokens)] = tokens
+                        token_count += len(tokens)
+                        # update progress bar
+                        if progress_bar is None:
+                            progress_bar = tqdm(total=shard_size, unit="tokens", desc=f"Shard {shard_index}")
+                        progress_bar.update(len(tokens))
+                    else:
+                        # write the current shard and start a new one
+                        filename = os.path.join(data_dir, f"{name}{split}_{shard_index:06d}.bin")
+                        # split the document into whatever fits in this shard; the remainder goes to next one
+                        remainder = shard_size - token_count
+                        progress_bar.update(remainder)
+                        all_tokens_np[token_count:token_count+remainder] = tokens[:remainder]
+                        write_datafile(filename, all_tokens_np.tolist())
+                        shard_index += 1
+                        progress_bar = None
+                        # populate the next shard with the leftovers of the current doc
+                        all_tokens_np[0:len(tokens)-remainder] = tokens[remainder:]
+                        token_count = len(tokens)-remainder
+
+                # write any remaining tokens as the last shard
+                if token_count != 0:
+                    filename = os.path.join(data_dir, f"{split}_{shard_index:06d}.bin")
+                    write_datafile(filename, (all_tokens_np[:token_count]).tolist())
 
     def _save_ids(self, dataset, data_dir, name="train"):
         dataset = dataset[name]
