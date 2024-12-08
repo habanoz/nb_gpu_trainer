@@ -141,7 +141,7 @@ class DistributedDataLoader:
                     self.advance(skip_load=True)
         
         current_shard_file = self.files[self.current_shard]
-        if not os.path.exists(f"{self.output_dir}/{current_shard_file}") 
+        if not os.path.exists(f"{self.output_dir}/{current_shard_file}"):
         
             if self.local_process_rank==0:
                 os.makedirs(self.output_dir, exist_ok=True)
