@@ -51,7 +51,7 @@ class HfModel(TrainerModel):
         hf_cfg = HfModelConfig.from_pretrained(repo_id)
         hf_model = HfModel(hf_cfg)
         hf_model.to(device=device)
-        
+        model_state = { (k[len("_orig_mod."):] if k.startswith("_orig_mod.") else k):v for k,v in model_state.items()}
         hf_model.model.load_state_dict(model_state)
         print("Restored model state from repository!")
 
