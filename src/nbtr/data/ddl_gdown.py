@@ -92,12 +92,13 @@ class DistributedDataLoader:
         if len(self.files)>1 and self.local_process_rank==0:
             self.prepare_next_file()
 
-    def advance(self): # advance to next data shard
+    def advance(self, skip_load=False): # advance to next data shard
         self.current_shard = (self.current_shard + 1) % len(self.files)
         self.current_position = 0
-        self.tokens = _load_data_shard(f"{self.output_dir}/{self.files[self.current_shard]}")
+        if not skip_load:
+            self.tokens = _load_data_shard(f"{self.output_dir}/{self.files[self.current_shard]}")
         
-        if len(self.files)>1 and self.local_process_rank==0:
+        if len(self.files)>1 and self.local_process_rank==0 and not skip_load:
             self.prepare_next_file()
     
     def prepare_next_file(self):
@@ -129,10 +130,34 @@ class DistributedDataLoader:
             self.advance()
         return x, y
     
-    def replay_next_batch(self, it, grad_acc_steps=1):
-        
-        raise NotImplemented("NOT implemented!!!!")
-            
+    def replay_next_batch(self, it, grad_acc_steps=1):   
+        B = self.B
+        T = self.T
+         
         for i in range(it):
             for k in range(grad_acc_steps):
-                self.next_batch()
+                self.current_position += B * T * self.num_processes
+                if self.current_position + (B * T * self.num_processes + 1) > len(self.tokens):
+                    self.advance(skip_load=True)
+        
+        current_shard_file = self.files[self.current_shard]
+        if not os.path.exists(f"{self.output_dir}/{current_shard_file}") 
+        
+            if self.local_process_rank==0:
+                os.makedirs(self.output_dir, exist_ok=True)
+                
+                print("Downloading", f"{self.output_dir}/{current_shard_file}")
+                gd_id = self.file_names_dict[current_shard_file]
+                _download_data_with_retry(gd_id, current_shard_file, self.output_dir, self.fn_mock_download)
+                print("Downloaded", f"{self.output_dir}/{current_shard_file}")
+            else:
+                _check_cnt = 0
+                while not os.path.exists(f"{self.output_dir}/{current_shard_file}") and _check_cnt<10:
+                    time.sleep(10)
+                    _check_cnt+=1
+                    
+                if _check_cnt>=10:
+                    raise Exception(f"Unable to find file '{self.output_dir}/{current_shard_file}'")
+            
+        if len(self.files)>1 and self.local_process_rank==0:
+            self.prepare_next_file()
