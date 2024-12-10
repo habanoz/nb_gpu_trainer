@@ -14,3 +14,4 @@ wandb/
 tokenizer.model
 tokenizer.vocab
 *.egg-info/
+fineweb-2_tur_Latn
