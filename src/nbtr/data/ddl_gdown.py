@@ -9,8 +9,14 @@ import os
 import glob
 import threading
 import time
+import shutil
+import gzip
 
 def _load_data_shard(filename):
+    
+    if filename.endswith(".gz"):
+        filename = filename[:-3]
+        
     with open(filename, "rb") as f:
         # first read the header, which is 256 int32 integers (4 bytes each)
         header = np.frombuffer(f.read(256*4), dtype=np.int32)
@@ -22,6 +28,16 @@ def _load_data_shard(filename):
     assert len(tokens) == ntok, "number of tokens read does not match header?"
     return tokens
 
+def decompress_gzipped_file(file_path):
+    if file_path.endswith(".gz"):
+        gzipped_file_path = file_path
+        output_file_path = file_path[:-3]
+        with gzip.open(gzipped_file_path, 'rb') as f_in, open(output_file_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        os.remove(gzipped_file_path)  # Remove the compressed file
+        print(f"Decompressed {gzipped_file_path} to {output_file_path} and removed the compressed file")
+
+
 def _download_data(gd_id, filename, output_dir):
     download_files=sorted(glob.glob(f"{output_dir}/*.bin"))
     if len(download_files)>2:
@@ -29,6 +45,9 @@ def _download_data(gd_id, filename, output_dir):
         os.remove(file_to_delete)
         print(f"{file_to_delete} deleted!")
     gdown.download(id=gd_id, output=f"{output_dir}/{filename}")
+    
+    if filename.endswith(".gz"):
+        decompress_gzipped_file(f"{output_dir}/{filename}")
 
 def _download_data_with_retry(gd_id, filename, output_dir, download_function, max_retry=5, wait_before_retry=30):
     
