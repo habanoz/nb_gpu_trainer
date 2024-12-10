@@ -12,10 +12,18 @@ import time
 import shutil
 import gzip
 
+def remove_gz_suffix(filename):
+    if filename.endswith('.gz'):
+        return filename[:-3]
+    return filename
+
+def uncompressed_file_exists(file_path):
+    file_path = remove_gz_suffix(file_path)
+    return os.path.exists(file_path)
+
 def _load_data_shard(filename):
     
-    if filename.endswith(".gz"):
-        filename = filename[:-3]
+    filename = remove_gz_suffix(filename)
         
     with open(filename, "rb") as f:
         # first read the header, which is 256 int32 integers (4 bytes each)
@@ -83,9 +91,9 @@ class DistributedDataLoader:
         # kick things off
         self.current_shard = None
         self.reset()
-
+    
     def reset(self):
-        if not os.path.exists(f"{self.output_dir}/{self.files[0]}") and self.local_process_rank==0:
+        if not uncompressed_file_exists(f"{self.output_dir}/{self.files[0]}") and self.local_process_rank==0:
             os.makedirs(self.output_dir, exist_ok=True)
             
             print("Downloading", f"{self.output_dir}/{self.files[0]}")
@@ -94,7 +102,7 @@ class DistributedDataLoader:
             print("Downloaded", f"{self.output_dir}/{self.files[0]}")
         
         _check_cnt = 0
-        while not os.path.exists(f"{self.output_dir}/{self.files[0]}") and _check_cnt<10:
+        while not uncompressed_file_exists(f"{self.output_dir}/{self.files[0]}") and _check_cnt<10:
             time.sleep(10)
             _check_cnt+=1
             
@@ -129,7 +137,7 @@ class DistributedDataLoader:
         next_shard_file_name_gdid = self.file_names_dict[next_shard_file_name]
         next_shard_file = f"{self.output_dir}/{next_shard_file_name}"
         
-        if not os.path.exists(next_shard_file) and self.local_process_rank==0:
+        if not uncompressed_file_exists(next_shard_file) and self.local_process_rank==0:
             _download_file_in_background(next_shard_file_name_gdid, next_shard_file_name, self.output_dir, self.fn_mock_download)
                 
     def next_batch(self):
@@ -160,7 +168,7 @@ class DistributedDataLoader:
                     self.advance(skip_load=True)
         
         current_shard_file = self.files[self.current_shard]
-        if not os.path.exists(f"{self.output_dir}/{current_shard_file}"):
+        if not uncompressed_file_exists(f"{self.output_dir}/{current_shard_file}"):
         
             if self.local_process_rank==0:
                 os.makedirs(self.output_dir, exist_ok=True)
@@ -171,7 +179,7 @@ class DistributedDataLoader:
                 print("Downloaded", f"{self.output_dir}/{current_shard_file}")
             else:
                 _check_cnt = 0
-                while not os.path.exists(f"{self.output_dir}/{current_shard_file}") and _check_cnt<10:
+                while not uncompressed_file_exists(f"{self.output_dir}/{current_shard_file}") and _check_cnt<10:
                     time.sleep(10)
                     _check_cnt+=1
                     
