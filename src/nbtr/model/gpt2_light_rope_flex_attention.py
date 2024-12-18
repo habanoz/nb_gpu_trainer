@@ -243,24 +243,20 @@ class GPT(nn.Module):
         END_OF_TEXT_ID=2
         BLOCK_SIZE = 128
         
-        print("shape:",inputs.shape, B, T, inputs[0].shape, len(inputs[0]))
-        
-        seq_len = len(inputs[0])
+        idx = inputs[0]
+        seq_len = len(idx)
         assert seq_len % BLOCK_SIZE == 0
         total_num_blocks = seq_len // BLOCK_SIZE
-        assert inputs[0].ndim == 1
+        assert idx.ndim == 1
         
-        docs = (inputs == END_OF_TEXT_ID).cumsum(0)
+        docs = (idx == END_OF_TEXT_ID).cumsum(0)
         def document_causal_mask(b, h, q_idx, kv_idx):
           causal_mask = q_idx >= kv_idx
           document_mask = docs[q_idx] == docs[kv_idx]
           window_mask = q_idx - kv_idx < 1024
           return causal_mask & document_mask & window_mask
-        
-        S = len(inputs[0])
-        
+        S = len(idx)
         block_mask = create_block_mask(document_causal_mask, None, None, S, S, device="cuda", _compile=True)
-
         
         freqs_cis = self.freqs_cis[:T]
         
