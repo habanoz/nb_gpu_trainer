@@ -243,6 +243,8 @@ class GPT(nn.Module):
         END_OF_TEXT_ID=2
         BLOCK_SIZE = 128
         
+        print("shape:",inputs.shape, B, T, inputs[0].shape, len(inputs[0]))
+        
         seq_len = len(inputs[0])
         assert seq_len % BLOCK_SIZE == 0
         total_num_blocks = seq_len // BLOCK_SIZE
